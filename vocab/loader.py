@@ -10,6 +10,9 @@ from pathlib import Path
 
 VOCAB_DATA_DIR = Path(__file__).parent / "data"
 
+# 缓存：避免每次请求都重新读取 JSON 和构建索引
+_vocab_cache: dict[str, dict[str, list[dict]]] = {}  # key="cet4,cet6,kaoyan" → keyword_map
+
 
 def get_available_vocabs() -> dict[str, dict]:
     """获取所有可用词库信息。"""
@@ -23,8 +26,12 @@ def get_available_vocabs() -> dict[str, dict]:
 def load_vocab(names: list[str]) -> dict[str, list[dict]]:
     """
     加载指定词库，返回 {中文关键词: [词条信息, ...]} 映射表。
-    支持复合词扩展。
+    支持复合词扩展。结果会被缓存。
     """
+    cache_key = ",".join(sorted(names))
+    if cache_key in _vocab_cache:
+        return _vocab_cache[cache_key]
+
     keyword_map: dict[str, list[dict]] = {}
     entries_by_word: dict[str, dict] = {}  # 英文单词 → 词条
 
@@ -51,6 +58,7 @@ def load_vocab(names: list[str]) -> dict[str, list[dict]]:
     keyword_map.update(expanded)
 
     print(f"[词库] 关键词索引总数: {len(keyword_map)}（含 {len(expanded)} 个扩展复合词）")
+    _vocab_cache[cache_key] = keyword_map
     return keyword_map
 
 

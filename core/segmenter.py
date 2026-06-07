@@ -7,9 +7,14 @@
 
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
+import os
 
 import jieba
 import jieba.posseg as pseg
+
+# 持久化进程池（避免每次调用都重新启动进程，节省 ~0.6s/worker）
+_pool: ProcessPoolExecutor | None = None
+_pool_workers: int = 0
 
 
 @dataclass
@@ -44,8 +49,13 @@ def init_jieba(custom_dict_path: str | None = None) -> None:
     _custom_dict_path = custom_dict_path
     if _initialized:
         return
+    jieba.setLogLevel(20)  # 抑制 "Building prefix dict" 等冗余输出
+    # 预热 jieba 模型（首次 cut 触发词典加载，~0.6s）
+    list(jieba.cut("初始化"))
     if custom_dict_path:
         jieba.load_userdict(custom_dict_path)
+    # 预热 posseg（import 触发额外加载 ~0.3s）
+    list(jieba.posseg.cut("初始化"))
     _initialized = True
 
 
@@ -81,6 +91,9 @@ def segment(text: str) -> list[Token]:
 
 def _init_worker(dict_path: str | None) -> None:
     """子进程初始化函数。"""
+    jieba.setLogLevel(20)
+    list(jieba.cut("初始化"))  # 预热模型
+    list(jieba.posseg.cut("初始化"))
     if dict_path:
         jieba.load_userdict(dict_path)
 
@@ -90,19 +103,38 @@ def _segment_batch(texts: list[str]) -> list[tuple[int, list[Token]]]:
     return [(i, segment(t)) for i, t in enumerate(texts)]
 
 
-def segment_parallel(texts: list[str], max_workers: int = 2,
+def _get_pool(max_workers: int) -> ProcessPoolExecutor:
+    """获取或创建持久化进程池。"""
+    global _pool, _pool_workers
+    if _pool is not None and _pool_workers == max_workers:
+        return _pool
+    if _pool is not None:
+        _pool.shutdown(wait=False)
+    _pool = ProcessPoolExecutor(
+        max_workers=max_workers,
+        initializer=_init_worker,
+        initargs=(_custom_dict_path,),
+    )
+    _pool_workers = max_workers
+    return _pool
+
+
+def segment_parallel(texts: list[str], max_workers: int | None = None,
                      batch_size: int = 200) -> list[list[Token]]:
     """
     并行分词多个段落。
 
-    将段落分批提交给子进程，减少进程间通信开销。
-    对于小文件，直接串行处理（避免进程启动开销）。
+    使用持久化进程池避免重复启动开销。
+    对于小文件，自动降级为串行处理。
     """
     total_chars = sum(len(t) for t in texts)
 
-    # 小文件直接串行
-    if len(texts) < 20 or total_chars < 100_000:
+    # 小文件直接串行（进程启动开销不划算）
+    if len(texts) < 50 or total_chars < 200_000:
         return [segment(t) for t in texts]
+
+    if max_workers is None:
+        max_workers = min(os.cpu_count() or 2, 4)
 
     # 分批：每 batch_size 个段落为一组
     batches = []
@@ -111,16 +143,12 @@ def segment_parallel(texts: list[str], max_workers: int = 2,
 
     # 并行处理每个批次
     all_results: list[list[Token]] = [None] * len(texts)  # type: ignore
+    pool = _get_pool(max_workers)
 
-    with ProcessPoolExecutor(
-        max_workers=max_workers,
-        initializer=_init_worker,
-        initargs=(_custom_dict_path,),
-    ) as executor:
-        batch_offset = 0
-        for batch_results in executor.map(_segment_batch, batches):
-            for local_idx, tokens in batch_results:
-                all_results[batch_offset + local_idx] = tokens
-            batch_offset += len(batch_results)
+    batch_offset = 0
+    for batch_results in pool.map(_segment_batch, batches):
+        for local_idx, tokens in batch_results:
+            all_results[batch_offset + local_idx] = tokens
+        batch_offset += len(batch_results)
 
     return all_results

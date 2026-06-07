@@ -25,7 +25,7 @@ OUTPUT_DIR = Path(__file__).parent / "output"
 def process_text(
     text: str,
     vocab_names: list[str],
-    parallel: bool = False,
+    parallel: bool | None = None,
     max_per_sentence: int = 3,
     max_per_chars: int = 100,
     min_score: float = 1.5,
@@ -48,6 +48,8 @@ def process_text(
         {"result": 注释后文本, "stats": {total_tokens, total_matched, total_filtered, filter_rate}}
     """
     # 1. 初始化 jieba
+    if progress_callback:
+        progress_callback(0, 0, "init")
     custom_dict = Path(__file__).parent / "vocab" / "custom_dict.txt"
     init_jieba(str(custom_dict) if custom_dict.exists() else None)
 
@@ -60,6 +62,10 @@ def process_text(
     non_empty = [p for p in paragraphs if p.strip()]
     total_paras = len(non_empty)
 
+    # 自动选择并行模式：>200 段或 >500KB 时启用
+    if parallel is None:
+        parallel = total_paras > 200 or len(text) > 500_000
+
     # 分词
     last_cb_time = [time.time()]
     CB_INTERVAL = 0.3  # 最少 0.3 秒回调一次，避免频繁 IO
@@ -71,13 +77,16 @@ def process_text(
             progress_callback(done, total, stage)
 
     if parallel:
+        if progress_callback:
+            progress_callback(0, total_paras, "segment")
         all_tokens = segment_parallel(non_empty)
+        _maybe_cb(total_paras, total_paras, "segment")
     else:
         all_tokens = []
         for i, p in enumerate(non_empty):
             all_tokens.append(segment(p))
             _maybe_cb(i + 1, total_paras, "segment")
-    _maybe_cb(total_paras, total_paras, "segment")
+        _maybe_cb(total_paras, total_paras, "segment")
 
     # 匹配 → 评分 → 密度过滤 → 注释
     annotated_map = {}
@@ -129,7 +138,7 @@ def process_novel(
     input_file: str,
     vocab_names: list[str],
     output_file: str | None = None,
-    parallel: bool = False,
+    parallel: bool | None = None,
     max_per_sentence: int = 3,
     max_per_chars: int = 100,
     min_score: float = 1.5,
@@ -214,10 +223,16 @@ if __name__ == "__main__":
 
     # 支持命令行参数
     input_file = sys.argv[1] if len(sys.argv) > 1 else "sample.txt"
-    parallel = "--parallel" in sys.argv
+    # --parallel / --no-parallel 显式控制，否则自动判断
+    if "--parallel" in sys.argv:
+        parallel = True
+    elif "--no-parallel" in sys.argv:
+        parallel = False
+    else:
+        parallel = None
 
     # 密度参数
-    max_per_sentence = 3
+    max_per_sentence = 1
     max_per_chars = 100
     min_score = 1.5
 

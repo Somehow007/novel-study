@@ -17,8 +17,9 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import StreamingResponse
 
+from core.segmenter import init_jieba
 from main import process_text
-from vocab.loader import get_available_vocabs
+from vocab.loader import get_available_vocabs, load_vocab
 
 # scripts/ 目录加入 sys.path 以便导入 fetch_novel
 sys.path.insert(0, str(Path(__file__).parent / "scripts"))
@@ -28,6 +29,19 @@ app = FastAPI(title="Novel Study", description="小说英语词汇填充工具")
 
 # 并发控制：保护 2 核 2G 服务器
 _semaphore = asyncio.Semaphore(2)
+
+
+@app.on_event("startup")
+async def _warmup():
+    """后台预加载 jieba 模型 + 词库，避免首次请求卡顿。"""
+    loop = asyncio.get_event_loop()
+
+    def _load():
+        custom_dict = Path(__file__).parent / "vocab" / "custom_dict.txt"
+        init_jieba(str(custom_dict) if custom_dict.exists() else None)
+        load_vocab(["cet4", "cet6", "kaoyan"])
+
+    loop.run_in_executor(None, _load)
 
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 

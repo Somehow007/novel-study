@@ -477,12 +477,20 @@ $('annotateBtn').addEventListener('click', async () => {
 });
 
 function handleAnnotateEvent(type, data, stageName) {
-    if (type === 'segment' || type === 'annotate') {
+    if (type === 'init') {
+        $('annotateProgressBar').style.width = '5%';
+        $('annotateProgressPct').textContent = '';
+        $('annotateProgressText').textContent = '正在初始化引擎...';
+    } else if (type === 'segment' || type === 'annotate') {
         const pct = data.total > 0 ? Math.round(data.done / data.total * 50) : 0;
         const offset = type === 'annotate' ? 50 : 0;
         $('annotateProgressBar').style.width = (pct + offset) + '%';
         $('annotateProgressPct').textContent = (pct + offset) + '%';
-        $('annotateProgressText').textContent = `[${stageName[type] || type}] ${data.done} / ${data.total} 段`;
+        if (type === 'segment' && data.done === 0) {
+            $('annotateProgressText').textContent = `[分词] 并行处理中...`;
+        } else {
+            $('annotateProgressText').textContent = `[${stageName[type] || type}] ${data.done} / ${data.total} 段`;
+        }
     } else if (type === 'complete') {
         $('annotateProgressBar').style.width = '100%';
         $('annotateProgressBar').classList.add('done');
