@@ -492,6 +492,13 @@ function handleAnnotateEvent(type, data, stageName) {
             $('annotateProgressText').textContent = `[${stageName[type] || type}] ${data.done} / ${data.total} 段`;
         }
     } else if (type === 'complete') {
+        if (!data.result || !data.stats) {
+            $('annotateProgressBar').classList.add('error');
+            $('annotateProgressText').textContent = '处理异常';
+            $('annotateProgressDetail').textContent = '未收到处理结果，请重试';
+            showAnnotateError('处理未返回结果，请重试');
+            return;
+        }
         $('annotateProgressBar').style.width = '100%';
         $('annotateProgressBar').classList.add('done');
         $('annotateProgressPct').textContent = '100%';

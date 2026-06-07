@@ -170,15 +170,17 @@ def process_novel(
 
     t0 = time.time()
 
-    stage_names = {"segment": "分词", "annotate": "注释"}
+    stage_names = {"init": "初始化", "segment": "分词", "annotate": "注释"}
 
     def _progress(done, total, stage):
-        pct = done / total * 100
-        elapsed = time.time() - t0
-        speed = done / elapsed if elapsed > 0 else 0
         name = stage_names.get(stage, stage)
-        # 用 stderr 避免与 stdout 缓冲冲突，确保实时刷新
-        sys.stderr.write(f"\r[{name}] {done}/{total} ({pct:.0f}%) | {speed:.0f} 段/秒")
+        if total == 0:
+            sys.stderr.write(f"\r[{name}] ...")
+        else:
+            pct = done / total * 100
+            elapsed = time.time() - t0
+            speed = done / elapsed if elapsed > 0 else 0
+            sys.stderr.write(f"\r[{name}] {done}/{total} ({pct:.0f}%) | {speed:.0f} 段/秒")
         sys.stderr.flush()
 
     # 处理

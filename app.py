@@ -150,17 +150,21 @@ async def fetch_stream(
     task = asyncio.create_task(run_crawl())
 
     async def event_stream():
-        while True:
-            try:
-                data = await asyncio.wait_for(queue.get(), timeout=300)
-            except asyncio.TimeoutError:
-                yield f"event: error\ndata: {json.dumps({'message': '超时'})}\n\n"
-                break
-            stage = data.get("stage", "progress")
-            yield f"event: {stage}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-            if stage in ("complete", "error"):
-                break
-        task.cancel()
+        try:
+            while True:
+                try:
+                    data = await asyncio.wait_for(queue.get(), timeout=15)
+                except asyncio.TimeoutError:
+                    # 保持连接活跃，防止代理/浏览器超时断开
+                    yield ": keepalive\n\n"
+                    continue
+                stage = data.get("stage", "progress")
+                yield f"event: {stage}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+                if stage in ("complete", "error"):
+                    break
+        finally:
+            if not task.done():
+                task.cancel()
 
     return StreamingResponse(
         event_stream(),
@@ -230,17 +234,20 @@ async def annotate_stream(
     task = asyncio.create_task(run_annotate())
 
     async def event_stream():
-        while True:
-            try:
-                data = await asyncio.wait_for(queue.get(), timeout=300)
-            except asyncio.TimeoutError:
-                yield f"event: error\ndata: {json.dumps({'message': '超时'})}\n\n"
-                break
-            stage = data.get("stage", "progress")
-            yield f"event: {stage}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-            if stage in ("complete", "error"):
-                break
-        task.cancel()
+        try:
+            while True:
+                try:
+                    data = await asyncio.wait_for(queue.get(), timeout=15)
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+                    continue
+                stage = data.get("stage", "progress")
+                yield f"event: {stage}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+                if stage in ("complete", "error"):
+                    break
+        finally:
+            if not task.done():
+                task.cancel()
 
     return StreamingResponse(
         event_stream(),
