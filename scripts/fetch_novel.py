@@ -846,8 +846,10 @@ def clean_chapter_text(text: str) -> str:
 # ── 进度管理 ────────────────────────────────────────────────────
 
 def save_progress(path: Path, downloaded: dict, written_idx: int, total: int):
+    # 不持久化失败的章节，续传时会重新下载
+    clean = {k: v for k, v in downloaded.items() if not v.get("error")}
     data = {
-        "downloaded": {str(k): v for k, v in downloaded.items()},
+        "downloaded": {str(k): v for k, v in clean.items()},
         "written_up_to": written_idx,
         "total": total,
     }
@@ -925,8 +927,13 @@ def fetch_novel(url: str, output_dir: str | None = None,
     downloaded, written_up_to = ({}, 0)
     if resume:
         downloaded, written_up_to = load_progress(progress_path)
+        # 清除之前失败的章节，让它们可以被重新下载
+        failed_indices = [k for k, v in downloaded.items() if v.get("error")]
+        for k in failed_indices:
+            del downloaded[k]
         if downloaded and not progress_callback:
-            print(f"[续传] 已下载 {len(downloaded)} 章，已写入 {written_up_to} 章")
+            print(f"[续传] 已下载 {len(downloaded)} 章，已写入 {written_up_to} 章"
+                  + (f"，清除 {len(failed_indices)} 个失败记录" if failed_indices else ""))
 
     to_download = [ch for ch in chapters if ch["index"] not in downloaded]
     if not to_download:
@@ -943,7 +950,7 @@ def fetch_novel(url: str, output_dir: str | None = None,
     t0 = time.time()
 
     def do_download(ch):
-        nonlocal failed, consecutive_fails
+        nonlocal failed
         # 随机延迟抖动 ±30%
         jitter = delay * random.uniform(0.7, 1.3)
         time.sleep(jitter)
@@ -952,10 +959,8 @@ def fetch_novel(url: str, output_dir: str | None = None,
         with lock:
             if r["error"]:
                 failed += 1
-                consecutive_fails += 1
             else:
                 downloaded[ch["index"]] = r
-                consecutive_fails = 0
         return r
 
     next_write = written_up_to
@@ -966,8 +971,10 @@ def fetch_novel(url: str, output_dir: str | None = None,
         while next_write < total and next_write in downloaded:
             r = downloaded[next_write]
             if r.get("error"):
-                parts.append(f"【{r['title']}】\n（下载失败: {r['error']}）")
-            elif r.get("content"):
+                # 跳过失败章节，不阻塞后续章节写入
+                next_write += 1
+                continue
+            if r.get("content"):
                 parts.append(f"【{r['title']}】\n{r['content']}")
             next_write += 1
 
@@ -993,8 +1000,10 @@ def fetch_novel(url: str, output_dir: str | None = None,
         while idx < total and idx in downloaded:
             r = downloaded[idx]
             if r.get("error"):
-                parts.append(f"【{r['title']}】\n（下载失败: {r['error']}）")
-            elif r.get("content"):
+                # 跳过失败章节，不阻塞后续章节写入
+                idx += 1
+                continue
+            if r.get("content"):
                 parts.append(f"【{r['title']}】\n{r['content']}")
             idx += 1
 
@@ -1021,8 +1030,11 @@ def fetch_novel(url: str, output_dir: str | None = None,
 
             downloaded[ch["index"]] = r
             if r["error"]:
+                consecutive_fails += 1
                 if not progress_callback:
                     print(f"\n  [失败] 第 {ch['index'] + 1} 章 {ch['title'][:20]}: {r['error']}")
+            else:
+                consecutive_fails = 0
 
             # 连续失败检测
             if consecutive_fails >= MAX_CONSECUTIVE_FAILS:
