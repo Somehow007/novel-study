@@ -691,23 +691,22 @@ def fetch_novel(url: str, output_dir: str | None = None,
                 delay: float = DEFAULT_DELAY, threads: int = DEFAULT_THREADS,
                 batch: int = DEFAULT_BATCH, resume: bool = False,
                 encoding: str | None = None,
-                proxy: str | None = None) -> Path:
+                proxy: str | None = None,
+                progress_callback=None) -> Path:
 
     session = create_session(proxy)
 
     try:
         book_title, chapters, content_sel, detected_enc = parse_toc(session, url)
-    except AntiCrawlDetected as e:
-        print(f"\n[拒绝] 反爬机制拦截：{e.reason}")
-        if e.details:
-            print(f"  {e.details}")
-        sys.exit(1)
+    except AntiCrawlDetected:
+        raise
+    except Exception as e:
+        raise RuntimeError(f"解析目录失败: {e}") from e
 
     enc = encoding or detected_enc
 
     if not chapters:
-        print("[错误] 未找到任何章节链接")
-        sys.exit(1)
+        raise RuntimeError("未找到任何章节链接")
 
     # 章节范围
     if start is not None or end is not None:
@@ -716,7 +715,14 @@ def fetch_novel(url: str, output_dir: str | None = None,
         chapters = chapters[s:e]
         for i, ch in enumerate(chapters):
             ch["index"] = i
-        print(f"[范围] 第 {s + 1} ~ {e} 章，共 {len(chapters)} 章")
+        if not progress_callback:
+            print(f"[范围] 第 {s + 1} ~ {e} 章，共 {len(chapters)} 章")
+
+    if progress_callback:
+        progress_callback(0, len(chapters), "toc", {
+            "title": book_title,
+            "total_chapters": len(chapters),
+        })
 
     # 输出目录
     safe_title = safe_dirname(book_title)
@@ -734,14 +740,16 @@ def fetch_novel(url: str, output_dir: str | None = None,
     downloaded, written_up_to = ({}, 0)
     if resume:
         downloaded, written_up_to = load_progress(progress_path)
-        if downloaded:
+        if downloaded and not progress_callback:
             print(f"[续传] 已下载 {len(downloaded)} 章，已写入 {written_up_to} 章")
 
     to_download = [ch for ch in chapters if ch["index"] not in downloaded]
     if not to_download:
-        print("[续传] 所有章节已下载，直接写入")
+        if not progress_callback:
+            print("[续传] 所有章节已下载，直接写入")
     else:
-        print(f"[下载] 待下载 {len(to_download)} 章，并发 {threads} 线程")
+        if not progress_callback:
+            print(f"[下载] 待下载 {len(to_download)} 章，并发 {threads} 线程")
 
     total = len(chapters)
     failed = 0
@@ -827,28 +835,41 @@ def fetch_novel(url: str, output_dir: str | None = None,
             done_count += 1
 
             if r["error"]:
-                print(f"\n  [失败] 第 {ch['index'] + 1} 章 {ch['title'][:20]}: {r['error']}")
+                if not progress_callback:
+                    print(f"\n  [失败] 第 {ch['index'] + 1} 章 {ch['title'][:20]}: {r['error']}")
             else:
                 downloaded[ch["index"]] = r
 
             # 连续失败检测
             if consecutive_fails >= MAX_CONSECUTIVE_FAILS:
-                print(f"\n\n[中止] 连续 {consecutive_fails} 章下载失败，")
-                print(f"  可能原因：IP 被封、反爬机制升级、站点不可用。")
-                print(f"  建议：更换代理 --proxy 或稍后重试 --resume。")
+                msg = (f"连续 {consecutive_fails} 章下载失败，"
+                       f"可能原因：IP 被封、反爬机制升级、站点不可用。")
+                if not progress_callback:
+                    print(f"\n\n[中止] {msg}")
+                    print(f"  建议：更换代理 --proxy 或稍后重试 --resume。")
+                if progress_callback:
+                    progress_callback(done_count, total, "error", {"message": msg})
                 aborted = True
                 pool.shutdown(wait=False, cancel_futures=True)
                 break
 
-            # 实时进度（stderr 避免缓冲）
+            # 进度回调
             elapsed = time.time() - t0
             speed = done_count / elapsed if elapsed > 0 else 0
-            pct = done_count / total * 100
-            sys.stderr.write(
-                f"\r[下载] {done_count}/{total} ({pct:.0f}%) "
-                f"| {speed:.1f} 章/秒 | 失败 {failed}"
-            )
-            sys.stderr.flush()
+            if progress_callback:
+                progress_callback(done_count, total, "download", {
+                    "chapter": ch["title"][:30],
+                    "failed": failed,
+                    "speed": round(speed, 1),
+                    "error": r["error"],
+                })
+            else:
+                pct = done_count / total * 100
+                sys.stderr.write(
+                    f"\r[下载] {done_count}/{total} ({pct:.0f}%) "
+                    f"| {speed:.1f} 章/秒 | 失败 {failed}"
+                )
+                sys.stderr.flush()
 
             if next_write in downloaded:
                 write_batch()
@@ -857,8 +878,9 @@ def fetch_novel(url: str, output_dir: str | None = None,
             write_batch()
 
     elapsed = time.time() - t0
-    sys.stderr.write("\r" + " " * 70 + "\r")
-    sys.stderr.flush()
+    if not progress_callback:
+        sys.stderr.write("\r" + " " * 70 + "\r")
+        sys.stderr.flush()
 
     # 元数据
     downloaded_count = len([r for r in downloaded.values() if not r.get("error")])
@@ -881,13 +903,26 @@ def fetch_novel(url: str, output_dir: str | None = None,
     if failed == 0 and not aborted and progress_path.exists():
         progress_path.unlink()
 
-    print(f"[完成] {book_title}")
-    print(f"  章节: {downloaded_count}/{total} 成功"
-          + (f"，{failed} 失败" if failed else "")
-          + ("（中止）" if aborted else ""))
-    print(f"  大小: {size_kb:.1f} KB")
-    print(f"  耗时: {elapsed:.1f} 秒")
-    print(f"  输出: {out_dir}/")
+    if progress_callback:
+        progress_callback(total, total, "complete", {
+            "title": book_title,
+            "downloaded": downloaded_count,
+            "total": total,
+            "failed": failed,
+            "aborted": aborted,
+            "size_kb": round(size_kb, 1),
+            "elapsed": round(elapsed, 1),
+            "output_dir": str(out_dir),
+            "output_file": str(output_path),
+        })
+    else:
+        print(f"[完成] {book_title}")
+        print(f"  章节: {downloaded_count}/{total} 成功"
+              + (f"，{failed} 失败" if failed else "")
+              + ("（中止）" if aborted else ""))
+        print(f"  大小: {size_kb:.1f} KB")
+        print(f"  耗时: {elapsed:.1f} 秒")
+        print(f"  输出: {out_dir}/")
 
     return out_dir
 
