@@ -99,6 +99,7 @@ CONTENT_SELECTORS = [
     "#htmlContent", "#text_c", "#novelcontent",
     ".content", ".chapter-content", ".read-content",
     ".novel-content", ".text-wrap", ".articlecontent",
+    ".word_read",
     "[itemprop='articleBody']",
 ]
 
@@ -118,6 +119,7 @@ AD_KEYWORDS = [
     "www.", ".com", ".net", ".org",
     "记住网址", "手机端", "app下载", "最快更新",
     "本章未完，请点击下一页继续", "阅读最新章节",
+    "上一章", "下一章", "章节目录", "保存书签",
 ]
 
 
@@ -529,10 +531,7 @@ def parse_toc(session, url: str) -> tuple:
     # 1. 先检查是否为已知不可爬站点
     block_reason = check_blocked_site(url)
     if block_reason:
-        print(f"\n[拒绝] 目标站点不可爬取：")
-        print(f"  {block_reason}")
-        print(f"\n建议：选择其他小说站点。")
-        sys.exit(1)
+        raise AntiCrawlDetected("目标站点不可爬取", block_reason)
 
     print(f"[目录] 正在解析: {url}")
     encoding = None
@@ -543,9 +542,74 @@ def parse_toc(session, url: str) -> tuple:
         print(f"\n[拒绝] 反爬机制拦截：{e.reason}")
         if e.details:
             print(f"  {e.details}")
-        sys.exit(1)
+        raise
 
-    # 2. 页面级反爬检测（JS 渲染、字体加密等）
+    # 2. 检测是否为书籍详情页（非目录页），如果是则跳转到章节目录
+    base = base_url_of(url)
+    toc_link = None
+    for a in soup.find_all("a", href=True):
+        text = a.get_text(strip=True)
+        if text in ("章节目录", "目录", "全部章节"):
+            href = a.get("href", "").strip()
+            if href and ".html" not in href:
+                if href.startswith("/"):
+                    toc_link = base + href
+                elif not href.startswith("http"):
+                    toc_link = urllib.parse.urljoin(url, href)
+                else:
+                    toc_link = href
+                break
+    if toc_link and toc_link != url:
+        print(f"[目录] 检测到章节目录页，跳转: {toc_link}")
+        soup = fetch_page(session, toc_link, check_anti_crawl=True)
+        url = toc_link
+
+    # 3. 如果不是目录第一页，沿"上一页"链跳转到第一页
+    for _ in range(20):  # 最多跳 20 次，防止死循环
+        prev_url = None
+        for a in soup.find_all("a", href=True):
+            if a.get_text(strip=True) == "上一页":
+                href = a.get("href", "").strip()
+                if href:
+                    if href.startswith("/"):
+                        prev_url = base + href
+                    elif not href.startswith("http"):
+                        prev_url = urllib.parse.urljoin(url, href)
+                    else:
+                        prev_url = href
+                break
+        if not prev_url:
+            break  # 没有"上一页"，已在首页
+
+        # 判断是否已在第一页：URL 以 /1/ 结尾且"上一页"是其父路径
+        if (url.rstrip("/").endswith("/1")
+                and url.rstrip("/").startswith(prev_url.rstrip("/"))):
+            break
+
+        print(f"[目录] 当前非首页，跳转: {prev_url}")
+        url = prev_url
+        soup = fetch_page(session, url, check_anti_crawl=True)
+
+    # 4. 沿"上一页"链可能跳到了详情页，再次检测章节目录链接
+    toc_link = None
+    for a in soup.find_all("a", href=True):
+        text = a.get_text(strip=True)
+        if text in ("章节目录", "目录", "全部章节"):
+            href = a.get("href", "").strip()
+            if href and ".html" not in href:
+                if href.startswith("/"):
+                    toc_link = base + href
+                elif not href.startswith("http"):
+                    toc_link = urllib.parse.urljoin(url, href)
+                else:
+                    toc_link = href
+                break
+    if toc_link and toc_link != url:
+        print(f"[目录] 跳转到章节目录: {toc_link}")
+        soup = fetch_page(session, toc_link, check_anti_crawl=True)
+        url = toc_link
+
+    # 3. 页面级反爬检测（JS 渲染、字体加密等）
     # fetch_page 已处理 HTTP 级检测，这里补充内容级检测
     page_text = str(soup)
 
@@ -561,39 +625,92 @@ def parse_toc(session, url: str) -> tuple:
         # 再做一次反爬检测（有些站点 TOC 页也需要 JS）
         body_text = soup.get_text(strip=True)
         if len(body_text) < 200:
-            print(f"\n[拒绝] 页面内容过少（{len(body_text)} 字），可能是 JS 动态渲染。")
-            print(f"  本工具只能抓取静态 HTML 内容。")
-            sys.exit(1)
+            raise AntiCrawlDetected(
+                f"页面内容过少（{len(body_text)} 字），可能是 JS 动态渲染",
+                "本工具只能抓取静态 HTML 内容"
+            )
         print("[警告] 未检测到目录选择器，尝试从全部链接中提取章节")
 
-    # 提取章节链接
-    links = soup.select(toc_sel) if toc_sel else []
-    if len(links) < 5:
-        links = [a for a in soup.find_all("a", href=True)
-                 if re.search(r"\d+\.html?", a.get("href", ""))
-                 and len(a.get_text(strip=True)) >= 2]
-
-    base = base_url_of(url)
+    # 提取章节链接（跟随目录分页）
     chapters = []
     seen = set()
+    toc_pages_visited = set()
+    current_toc_url = url
 
-    for a in links:
-        href = a.get("href", "").strip()
-        title = a.get_text(strip=True)
-        if not href or not title or href in ("#", "javascript:void(0)", "javascript:;"):
-            continue
+    for _ in range(50):  # 最多 50 页目录，防止死循环
+        if current_toc_url in toc_pages_visited:
+            break
+        toc_pages_visited.add(current_toc_url)
 
-        if href.startswith("//"):
-            href = urllib.parse.urlparse(url).scheme + ":" + href
-        elif href.startswith("/"):
-            href = base + href
-        elif not href.startswith("http"):
-            href = urllib.parse.urljoin(url, href)
+        if current_toc_url != url:
+            print(f"[目录] 翻页: {current_toc_url}")
+            try:
+                soup = fetch_page(session, current_toc_url, check_anti_crawl=True)
+            except Exception as e:
+                print(f"[目录] 翻页失败: {e}")
+                break
 
-        if href in seen:
-            continue
-        seen.add(href)
-        chapters.append({"index": len(chapters), "title": title, "url": href})
+        links = soup.select(toc_sel) if toc_sel else []
+        if len(links) < 5:
+            links = [a for a in soup.find_all("a", href=True)
+                     if re.search(r"\d+\.html?", a.get("href", ""))
+                     and len(a.get_text(strip=True)) >= 2]
+
+        for a in links:
+            href = a.get("href", "").strip()
+            title = a.get_text(strip=True)
+            if not href or not title or href in ("#", "javascript:void(0)", "javascript:;"):
+                continue
+
+            if href.startswith("//"):
+                href = urllib.parse.urlparse(url).scheme + ":" + href
+            elif href.startswith("/"):
+                href = base + href
+            elif not href.startswith("http"):
+                href = urllib.parse.urljoin(url, href)
+
+            if href in seen:
+                continue
+            seen.add(href)
+            chapters.append({"index": len(chapters), "title": title, "url": href})
+
+        # 查找目录"下一页"链接（排除章节分页的"下一页"）
+        next_toc_url = None
+        for a in soup.find_all("a", href=True):
+            if a.get_text(strip=True) != "下一页":
+                continue
+            href = a.get("href", "").strip()
+            if not href or href in ("#", "javascript:void(0)", "javascript:;"):
+                continue
+            # 目录分页 URL 通常不含 .html（如 /biqu5403/2/）
+            if ".html" in href:
+                continue
+            if href.startswith("//"):
+                href = urllib.parse.urlparse(url).scheme + ":" + href
+            elif href.startswith("/"):
+                href = base + href
+            elif not href.startswith("http"):
+                href = urllib.parse.urljoin(url, href)
+            next_toc_url = href
+            break
+
+        if not next_toc_url:
+            break
+        current_toc_url = next_toc_url
+
+    # 按章节号排序（处理目录页乱序的情况）
+    def _chapter_sort_key(ch):
+        m = re.search(r'第\s*(\d+)\s*章', ch["title"])
+        if m:
+            return int(m.group(1))
+        m = re.search(r'(\d+)', ch["title"])
+        if m:
+            return int(m.group(1))
+        return ch["index"]  # 无数字则保持原序
+
+    chapters.sort(key=_chapter_sort_key)
+    for i, ch in enumerate(chapters):
+        ch["index"] = i
 
     print(f"[目录] 书名: {book_title}，共 {len(chapters)} 章")
     if content_sel:
@@ -603,6 +720,53 @@ def parse_toc(session, url: str) -> tuple:
 
 # ── 章节下载 ────────────────────────────────────────────────────
 
+def _extract_content(soup, content_sel: str | None):
+    """从页面提取正文元素，清理标签后返回文本。"""
+    if content_sel:
+        el = soup.select_one(content_sel)
+    else:
+        el = None
+        for sel in CONTENT_SELECTORS:
+            el = soup.select_one(sel)
+            if el and len(el.get_text(strip=True)) >= 50:
+                break
+            el = None
+    if not el:
+        return None
+    for tag in el.find_all(["script", "style", "ins", "iframe"]):
+        tag.decompose()
+    for c in el.find_all(string=lambda t: isinstance(t, Comment)):
+        c.extract()
+    return el
+
+
+def _find_next_page(soup, current_url: str) -> str | None:
+    """查找"下一页"链接（章节内翻页，非下一章）。"""
+    for a in soup.find_all("a", href=True):
+        text = a.get_text(strip=True)
+        if text not in ("下一页", "下一章"):
+            continue
+        href = a["href"].strip()
+        if not href or href in ("#", "javascript:void(0)", "javascript:;"):
+            continue
+        # 拼接为绝对 URL
+        if href.startswith("//"):
+            href = urllib.parse.urlparse(current_url).scheme + ":" + href
+        elif href.startswith("/"):
+            href = base_url_of(current_url) + href
+        elif not href.startswith("http"):
+            href = urllib.parse.urljoin(current_url, href)
+        # "下一章" 可能是章节内分页（如 820807_1.html）或真正的下一章
+        # 只跟随分页模式的链接（当前 URL 的 _N 变体）
+        if text == "下一章":
+            cur_base = re.sub(r"(_\d+)?\.html?$", "", current_url)
+            nxt_base = re.sub(r"(_\d+)?\.html?$", "", href)
+            if cur_base != nxt_base:
+                continue  # 不是同一章节的分页，跳过
+        return href
+    return None
+
+
 def download_chapter(session, chapter: dict,
                      content_sel: str | None, encoding: str | None) -> dict:
     url = chapter["url"]
@@ -610,28 +774,39 @@ def download_chapter(session, chapter: dict,
     try:
         soup = fetch_page(session, url, encoding, check_anti_crawl=True)
 
-        h1 = soup.select_one("h1")
-        title = h1.get_text(strip=True) if h1 else chapter["title"]
-
-        if content_sel:
-            el = soup.select_one(content_sel)
+        # 优先取 .reader-main 内的 h1.title，避免取到站点名称
+        h1 = (soup.select_one(".reader-main h1.title")
+              or soup.select_one(".reader-main h1")
+              or soup.select_one("h1.title"))
+        if h1:
+            h1_text = h1.get_text(strip=True)
+            # 过滤掉站点名（通常很短且不含章节关键字）
+            if len(h1_text) > 4 or re.search(r'第.*章|chapter|\d+', h1_text, re.I):
+                title = h1_text
+            else:
+                title = chapter["title"]
         else:
-            el = None
-            for sel in CONTENT_SELECTORS:
-                el = soup.select_one(sel)
-                if el and len(el.get_text(strip=True)) >= 50:
-                    break
-                el = None
+            title = chapter["title"]
 
+        el = _extract_content(soup, content_sel)
         if not el:
             return {"index": idx, "title": title, "content": "", "error": "未找到正文"}
 
-        for tag in el.find_all(["script", "style", "ins", "iframe"]):
-            tag.decompose()
-        for c in el.find_all(string=lambda t: isinstance(t, Comment)):
-            c.extract()
-
         text = clean_chapter_text(el.get_text(separator="\n"))
+
+        # 跟随章节内分页（"下一页"链接）
+        for _ in range(20):  # 最多 20 页，防止死循环
+            next_url = _find_next_page(soup, url)
+            if not next_url:
+                break
+            url = next_url
+            soup = fetch_page(session, url, encoding, check_anti_crawl=True)
+            el = _extract_content(soup, content_sel)
+            if not el:
+                break
+            page_text = clean_chapter_text(el.get_text(separator="\n"))
+            if page_text:
+                text += "\n" + page_text
 
         if not text or len(text) < 10:
             return {"index": idx, "title": title, "content": "",
