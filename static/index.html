@@ -356,16 +356,15 @@ $('fetchBtn').addEventListener('click', () => {
     });
 
     es.addEventListener('error', e => {
+        // 先检查状态，再决定是否关闭（close 后状态变为 CLOSED）
+        if (e.target.readyState === EventSource.CONNECTING) {
+            // 连接断开，EventSource 正在自动重连 → 忽略
+            return;
+        }
+        // readyState === OPEN 时收到 error 事件 = 服务端发送的自定义 error
         es.close();
         let msg = '连接中断';
         try { msg = JSON.parse(e.data).message; } catch(_) {}
-        // SSE 的 error 事件可能是连接错误，也可能是自定义 error 事件
-        if (e.target.readyState === EventSource.CLOSED) {
-            msg = '连接被关闭';
-        } else if (e.target.readyState === EventSource.CONNECTING) {
-            // EventSource 自动重连，忽略
-            return;
-        }
         $('fetchProgressBar').classList.add('error');
         $('fetchProgressText').textContent = '爬取失败';
         $('fetchProgressDetail').textContent = msg;
