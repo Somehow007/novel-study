@@ -65,4 +65,4 @@ uv run python -m pytest tests/ -v
 | cet6 | 2,126 | CET-6 进阶词汇 |
 | kaoyan | 5,101 | 考研高频词汇 |
 
-词库数据位于 `vocab/data/`，自定义分词词典位于 `vocab/custom_dict.txt`。
+词库数据位于 `vocab/data/`。
