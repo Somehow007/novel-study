@@ -37,8 +37,7 @@ async def _warmup():
     loop = asyncio.get_event_loop()
 
     def _load():
-        custom_dict = Path(__file__).parent / "vocab" / "custom_dict.txt"
-        init_jieba(str(custom_dict) if custom_dict.exists() else None)
+        init_jieba()
         load_vocab(["cet4", "cet6", "kaoyan"])
 
     loop.run_in_executor(None, _load)

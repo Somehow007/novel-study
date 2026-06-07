@@ -448,6 +448,7 @@ $('annotateBtn').addEventListener('click', async () => {
         let buffer = '';
         let stageName = {segment: '分词', annotate: '注释'};
 
+        let gotComplete = false;
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
@@ -461,10 +462,22 @@ $('annotateBtn').addEventListener('click', async () => {
                 if (line.startsWith('event: ')) {
                     eventType = line.slice(7).trim();
                 } else if (line.startsWith('data: ')) {
-                    const data = JSON.parse(line.slice(6));
-                    handleAnnotateEvent(eventType, data, stageName);
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        if (eventType === 'complete' || eventType === 'error') gotComplete = true;
+                        handleAnnotateEvent(eventType, data, stageName);
+                    } catch (jsonErr) {
+                        // 忽略无法解析的行（如 keepalive 注释）
+                    }
                 }
             }
+        }
+        // 流结束但未收到 complete 事件 → 连接中断
+        if (!gotComplete) {
+            $('annotateProgressBar').classList.add('error');
+            $('annotateProgressText').textContent = '连接中断';
+            $('annotateProgressDetail').textContent = '服务器未返回处理结果，请重试';
+            showAnnotateError('连接中断，未收到处理结果');
         }
     } catch (e) {
         $('annotateProgressBar').classList.add('error');

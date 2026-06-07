@@ -164,7 +164,17 @@ def detect_anti_crawl(text: str, status_code: int = 200,
     text_lower = text.lower() if text else ""
 
     # ── 1. HTTP 状态码（先检查是否为 Cloudflare 挑战，再下结论）──
-    if status_code in (403, 503):
+    if status_code in (403, 503, 520, 521, 522):
+        # Cloudflare 专用错误码 520/521/522 直接视为 CF 挑战
+        if status_code in (520, 521, 522):
+            raise AntiCrawlDetected(
+                f"Cloudflare 拦截（HTTP {status_code}）",
+                "目标网站使用了 Cloudflare 防护，服务器返回异常。\n"
+                "将尝试使用 cloudscraper 自动绕过，若失败则建议：\n"
+                "  1. 使用代理 --proxy 分散请求\n"
+                "  2. 增大 --delay（如 --delay 3）降低请求频率\n"
+                "  3. 稍后重试（IP 冷却后可能恢复）"
+            )
         # 403/503 可能是 Cloudflare 挑战页面，先检查内容
         cf_challenge = [
             "challenge-platform", "cf-challenge", "__cf_chl",

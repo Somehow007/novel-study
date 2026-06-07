@@ -7,7 +7,7 @@ from core.segmenter import Token, init_jieba, segment
 @pytest.fixture(autouse=True)
 def setup():
     """初始化 jieba。"""
-    init_jieba("vocab/custom_dict.txt")
+    init_jieba()
 
 
 class TestToken:

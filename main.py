@@ -50,8 +50,7 @@ def process_text(
     # 1. 初始化 jieba
     if progress_callback:
         progress_callback(0, 0, "init")
-    custom_dict = Path(__file__).parent / "vocab" / "custom_dict.txt"
-    init_jieba(str(custom_dict) if custom_dict.exists() else None)
+    init_jieba()
 
     # 2. 加载词库 & 构建匹配器
     keyword_map = load_vocab(vocab_names)

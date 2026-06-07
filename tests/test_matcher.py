@@ -7,7 +7,7 @@ from core.matcher import Matcher, MatchResult
 
 @pytest.fixture(autouse=True)
 def setup():
-    init_jieba("vocab/custom_dict.txt")
+    init_jieba()
 
 
 @pytest.fixture
@@ -53,11 +53,11 @@ class TestMatcher:
             )
 
     def test_compound_word_match(self, matcher):
-        """复合词匹配：木床 应该作为一个整体匹配。"""
-        tokens = segment("他躺在木床上")
+        """复合词匹配：暮色 应该作为一个整体匹配。"""
+        tokens = segment("暮色降临")
         results = matcher.match(tokens)
         matched_words = [r.text for r in results]
-        assert "木床" in matched_words
+        assert "暮色" in matched_words
 
     def test_skip_punctuation(self, matcher):
         tokens = segment("少年，蜡烛")
