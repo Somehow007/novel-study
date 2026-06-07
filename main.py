@@ -76,16 +76,19 @@ def process_text(
             progress_callback(done, total, stage)
 
     if parallel:
-        if progress_callback:
-            progress_callback(0, total_paras, "segment")
-        all_tokens = segment_parallel(non_empty)
-        _maybe_cb(total_paras, total_paras, "segment")
+        # 分批并行：每批 10000 段，批间发进度，避免长时间无事件导致连接断开
+        CHUNK = 10000
+        all_tokens = []
+        for offset in range(0, total_paras, CHUNK):
+            batch = non_empty[offset:offset + CHUNK]
+            all_tokens.extend(segment_parallel(batch))
+            _maybe_cb(min(offset + CHUNK, total_paras), total_paras, "segment")
     else:
         all_tokens = []
         for i, p in enumerate(non_empty):
             all_tokens.append(segment(p))
             _maybe_cb(i + 1, total_paras, "segment")
-        _maybe_cb(total_paras, total_paras, "segment")
+    _maybe_cb(total_paras, total_paras, "segment")
 
     # 匹配 → 评分 → 密度过滤 → 注释
     annotated_map = {}
