@@ -1019,11 +1019,10 @@ def fetch_novel(url: str, output_dir: str | None = None,
             r = future.result()
             done_count += 1
 
+            downloaded[ch["index"]] = r
             if r["error"]:
                 if not progress_callback:
                     print(f"\n  [失败] 第 {ch['index'] + 1} 章 {ch['title'][:20]}: {r['error']}")
-            else:
-                downloaded[ch["index"]] = r
 
             # 连续失败检测
             if consecutive_fails >= MAX_CONSECUTIVE_FAILS:
