@@ -4,6 +4,8 @@
 核心流程：中文文本 → 分词 → 匹配 → 评分 → 密度过滤 → 注释输出
 """
 
+import sys
+import time
 from pathlib import Path
 
 from core.annotator import annotate
@@ -27,6 +29,7 @@ def process_text(
     max_per_sentence: int = 3,
     max_per_chars: int = 100,
     min_score: float = 1.5,
+    progress_callback=None,
 ) -> dict:
     """
     处理文本，返回带注释的文本和统计信息。
@@ -38,6 +41,8 @@ def process_text(
         max_per_sentence: 每句话最多标注几个词
         max_per_chars: 每100个字符内最多标注几个词
         min_score: 最低难度分数（低于此分数的词不标注）
+        progress_callback: 进度回调 callback(processed, total, stage)
+            stage: "segment" | "annotate"
 
     返回：
         {"result": 注释后文本, "stats": {total_tokens, total_matched, total_filtered, filter_rate}}
@@ -53,12 +58,26 @@ def process_text(
     # 3. 按段落处理
     paragraphs = text.split("\n")
     non_empty = [p for p in paragraphs if p.strip()]
+    total_paras = len(non_empty)
 
     # 分词
+    last_cb_time = [time.time()]
+    CB_INTERVAL = 0.3  # 最少 0.3 秒回调一次，避免频繁 IO
+
+    def _maybe_cb(done, total, stage):
+        now = time.time()
+        if progress_callback and (now - last_cb_time[0] >= CB_INTERVAL or done == total):
+            last_cb_time[0] = now
+            progress_callback(done, total, stage)
+
     if parallel:
         all_tokens = segment_parallel(non_empty)
     else:
-        all_tokens = [segment(p) for p in non_empty]
+        all_tokens = []
+        for i, p in enumerate(non_empty):
+            all_tokens.append(segment(p))
+            _maybe_cb(i + 1, total_paras, "segment")
+    _maybe_cb(total_paras, total_paras, "segment")
 
     # 匹配 → 评分 → 密度过滤 → 注释
     annotated_map = {}
@@ -66,14 +85,12 @@ def process_text(
     total_filtered = 0
     total_tokens = 0
 
-    for para, tokens in zip(non_empty, all_tokens):
+    for i, (para, tokens) in enumerate(zip(non_empty, all_tokens)):
         total_tokens += len(tokens)
 
-        # 匹配（含评分）
         matches = matcher.match(tokens)
         total_matched += len(matches)
 
-        # 密度过滤
         filtered = filter_by_density(
             para, matches,
             max_per_sentence=max_per_sentence,
@@ -82,8 +99,10 @@ def process_text(
         )
         total_filtered += len(filtered)
 
-        # 注释
         annotated_map[para] = annotate(para, filtered)
+
+        _maybe_cb(i + 1, total_paras, "annotate")
+    _maybe_cb(total_paras, total_paras, "annotate")
 
     # 重组段落（保留空行）
     result_parts = []
@@ -131,13 +150,27 @@ def process_novel(
     input_path = DATA_DIR / input_file
     text = input_path.read_text(encoding="utf-8")
 
+    size_kb = len(text.encode("utf-8")) / 1024
     print(f"\n{'='*60}")
     print(f"输入文件: {input_path}")
-    print(f"原文长度: {len(text)} 字符 ({len(text)/1024:.0f} KB)")
+    print(f"原文长度: {len(text)} 字符 ({size_kb:.0f} KB)")
     print(f"选用词库: {', '.join(vocab_names)}")
     print(f"并行模式: {'开启' if parallel else '关闭'}")
     print(f"密度控制: 每句≤{max_per_sentence}, 每{max_per_chars}字≤{max_per_chars//25}, 最低分≥{min_score}")
     print(f"{'='*60}\n")
+
+    t0 = time.time()
+
+    stage_names = {"segment": "分词", "annotate": "注释"}
+
+    def _progress(done, total, stage):
+        pct = done / total * 100
+        elapsed = time.time() - t0
+        speed = done / elapsed if elapsed > 0 else 0
+        name = stage_names.get(stage, stage)
+        # 用 stderr 避免与 stdout 缓冲冲突，确保实时刷新
+        sys.stderr.write(f"\r[{name}] {done}/{total} ({pct:.0f}%) | {speed:.0f} 段/秒")
+        sys.stderr.flush()
 
     # 处理
     output = process_text(
@@ -147,7 +180,10 @@ def process_novel(
         max_per_sentence=max_per_sentence,
         max_per_chars=max_per_chars,
         min_score=min_score,
+        progress_callback=_progress,
     )
+    sys.stderr.write("\r" + " " * 60 + "\r")  # 清除进度行
+    sys.stderr.flush()
     result = output["result"]
     stats = output["stats"]
 

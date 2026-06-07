@@ -5,6 +5,7 @@
 优先保留高难度词汇的标注，淘汰低难度的。
 """
 
+import bisect
 import re
 
 from core.matcher import MatchResult
@@ -27,15 +28,6 @@ def filter_by_density(
     1. 按 min_score 过滤低分匹配（低于阈值直接丢弃）
     2. 按句子分组，每句内按分数降序排列，取 top N
     3. 滑动字符窗口检查局部密度
-
-    参数：
-        text: 原文
-        matches: 所有匹配结果
-        max_per_sentence: 每句话最多保留几个标注
-        max_per_chars: 每 N 个字符内最多保留几个标注
-        min_score: 最低分数阈值（低于此分数直接跳过）
-
-    返回：过滤后的匹配结果列表
     """
     if not matches:
         return []
@@ -80,18 +72,40 @@ def _select_per_sentence(
     matches: list[MatchResult],
     max_per_sentence: int,
 ) -> list[MatchResult]:
-    """每个句子内按分数降序取 top N。"""
+    """
+    每个句子内按分数降序取 top N。
+
+    优化：预排序 matches，用双指针分配到句子，避免每个句子遍历全部 matches。
+    复杂度从 O(句子数×匹配数) 降到 O(匹配数×log(匹配数))。
+    """
+    if not matches:
+        return []
+
+    # 按位置排序，便于双指针扫描
+    by_position = sorted(matches, key=lambda m: m.start)
+
     selected = []
+    match_idx = 0
+    n_matches = len(by_position)
 
     for sent_start, sent_end in sentences:
-        # 找出属于这个句子的匹配
-        sent_matches = [
-            m for m in matches
-            if m.start >= sent_start and m.start < sent_end
-        ]
-        # 按分数降序排列，取 top N
-        sent_matches.sort(key=lambda m: m.score, reverse=True)
-        selected.extend(sent_matches[:max_per_sentence])
+        # 跳过已经在之前句子范围内的 matches
+        while match_idx < n_matches and by_position[match_idx].start < sent_start:
+            match_idx += 1
+
+        # 收集属于当前句子的 matches
+        sent_matches = []
+        j = match_idx
+        while j < n_matches and by_position[j].start < sent_end:
+            sent_matches.append(by_position[j])
+            j += 1
+
+        # 按分数降序取 top N
+        if len(sent_matches) > max_per_sentence:
+            sent_matches.sort(key=lambda m: m.score, reverse=True)
+            sent_matches = sent_matches[:max_per_sentence]
+
+        selected.extend(sent_matches)
 
     return selected
 
@@ -103,34 +117,45 @@ def _enforce_char_window(
     """
     滑动字符窗口检查局部密度。
 
-    对于每个匹配，检查它前面 max_per_chars 个字符内
-    已经有多少个被选中的匹配。如果超过限制，淘汰分数最低的。
+    优化：kept 列表按位置排序，用二分查找定位窗口边界，
+    避免每个 match 遍历全部 kept。复杂度从 O(n²) 降到 O(n×log(n))。
     """
     if not matches:
         return []
 
-    # 按位置排序
     matches_sorted = sorted(matches, key=lambda m: m.start)
+    limit = max_per_chars // 25  # 每25字符最多1个
 
-    # 贪心选择：保留列表
     kept: list[MatchResult] = []
-    kept_set: set[int] = set()  # 用 id 标记
+    kept_positions: list[int] = []  # 与 kept 平行，存储 start 位置
 
     for m in matches_sorted:
-        # 计算窗口内已有的匹配数
         window_start = max(0, m.start - max_per_chars)
-        in_window = [k for k in kept if k.start >= window_start]
 
-        if len(in_window) < max_per_chars // 25:  # 粗略：每25字符最多1个
-            kept.append(m)
-            kept_set.add(id(m))
+        # 二分查找：找到 window_start 在 kept_positions 中的插入点
+        lo = bisect.bisect_left(kept_positions, window_start)
+        in_window_count = len(kept_positions) - lo
+
+        if in_window_count < limit:
+            # 窗口未满，直接插入（保持有序）
+            insert_at = bisect.bisect_left(kept_positions, m.start)
+            kept.insert(insert_at, m)
+            kept_positions.insert(insert_at, m.start)
         else:
-            # 窗口满了，和窗口内最低分的比较
-            in_window.sort(key=lambda x: x.score)
-            weakest = in_window[0]
-            if m.score > weakest.score:
+            # 窗口已满，和窗口内最低分比较
+            weakest_idx = lo
+            weakest_score = kept[lo].score
+            for k in range(lo + 1, len(kept)):
+                if kept[k].score < weakest_score:
+                    weakest_score = kept[k].score
+                    weakest_idx = k
+
+            if m.score > weakest_score:
                 # 替换最弱的
-                kept.remove(weakest)
-                kept.append(m)
+                del kept[weakest_idx]
+                del kept_positions[weakest_idx]
+                insert_at = bisect.bisect_left(kept_positions, m.start)
+                kept.insert(insert_at, m)
+                kept_positions.insert(insert_at, m.start)
 
     return kept

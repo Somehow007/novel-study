@@ -17,3 +17,13 @@ output/*.txt
 
 # Pytest cache
 .pytest_cache/
+
+# Claude Code
+.claude/
+
+# Downloaded novels and crawler artifacts
+data/*.txt
+data/*.meta.json
+data/*.progress.json
+!data/sample*.txt
+data/*/

@@ -19,7 +19,7 @@ app = FastAPI(title="Novel Study", description="小说英语词汇填充工具")
 # 并发控制：保护 2 核 2G 服务器
 _semaphore = asyncio.Semaphore(2)
 
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 
 
 @app.get("/api/health")
@@ -72,7 +72,7 @@ async def annotate(
             lambda: process_text(
                 text=text,
                 vocab_names=vocab_names,
-                parallel=len(text) > 100_000,
+                parallel=True,  # 50MB 文件必须并行
                 max_per_sentence=max_per_sentence,
                 max_per_chars=max_per_chars,
                 min_score=min_score,
