@@ -1,0 +1,177 @@
+[
+  {
+    "word": "dusk",
+    "phonetic": "/dʌsk/",
+    "pos": "n.",
+    "cn_meanings": ["黄昏", "傍晚"],
+    "cn_keywords": ["黄昏", "傍晚", "暮色", "暮"]
+  },
+  {
+    "word": "town",
+    "phonetic": "/taʊn/",
+    "pos": "n.",
+    "cn_meanings": ["镇", "城镇", "小镇"],
+    "cn_keywords": ["小镇", "城镇", "镇子", "镇"]
+  },
+  {
+    "word": "secluded",
+    "phonetic": "/sɪˈkluːdɪd/",
+    "pos": "adj.",
+    "cn_meanings": ["偏僻的", "幽静的", "僻静的"],
+    "cn_keywords": ["僻静", "偏僻", "幽静", "清幽"]
+  },
+  {
+    "word": "slim",
+    "phonetic": "/slɪm/",
+    "pos": "adj.",
+    "cn_meanings": ["纤细的", "苗条的", "消瘦的"],
+    "cn_keywords": ["清瘦", "纤细", "消瘦", "瘦削", "苗条"]
+  },
+  {
+    "word": "custom",
+    "phonetic": "/ˈkʌstəm/",
+    "pos": "n.",
+    "cn_meanings": ["习俗", "风俗", "习惯"],
+    "cn_keywords": ["习俗", "风俗", "习惯", "规矩"]
+  },
+  {
+    "word": "candle",
+    "phonetic": "/ˈkændl/",
+    "pos": "n.",
+    "cn_meanings": ["蜡烛"],
+    "cn_keywords": ["蜡烛", "烛火", "烛"]
+  },
+  {
+    "word": "beam",
+    "phonetic": "/biːm/",
+    "pos": "n.",
+    "cn_meanings": ["梁", "横梁", "光束"],
+    "cn_keywords": ["房梁", "横梁", "梁", "梁柱"]
+  },
+  {
+    "word": "wall",
+    "phonetic": "/wɔːl/",
+    "pos": "n.",
+    "cn_meanings": ["墙", "墙壁"],
+    "cn_keywords": ["墙壁", "墙", "墙面"]
+  },
+  {
+    "word": "tap",
+    "phonetic": "/tæp/",
+    "pos": "v.",
+    "cn_meanings": ["轻敲", "敲打", "轻拍"],
+    "cn_keywords": ["敲敲打打", "敲打", "轻敲", "敲击"]
+  },
+  {
+    "word": "drive away",
+    "phonetic": "/draɪv əˈweɪ/",
+    "pos": "phrase",
+    "cn_meanings": ["驱赶", "赶走", "驱逐"],
+    "cn_keywords": ["驱赶", "赶走", "驱逐", "驱除"]
+  },
+  {
+    "word": "snake",
+    "phonetic": "/sneɪk/",
+    "pos": "n.",
+    "cn_meanings": ["蛇"],
+    "cn_keywords": ["蛇", "蛇虫"]
+  },
+  {
+    "word": "scorpion",
+    "phonetic": "/ˈskɔːrpiən/",
+    "pos": "n.",
+    "cn_meanings": ["蝎子"],
+    "cn_keywords": ["蝎子", "蝎"]
+  },
+  {
+    "word": "centipede",
+    "phonetic": "/ˈsentɪpiːd/",
+    "pos": "n.",
+    "cn_meanings": ["蜈蚣"],
+    "cn_keywords": ["蜈蚣"]
+  },
+  {
+    "word": "mutter",
+    "phonetic": "/ˈmʌtər/",
+    "pos": "v.",
+    "cn_meanings": ["喃喃自语", "低声说", "咕哝"],
+    "cn_keywords": ["念念有词", "喃喃", "嘟囔", "咕哝", "低声"]
+  },
+  {
+    "word": "incantation",
+    "phonetic": "/ˌɪnkænˈteɪʃn/",
+    "pos": "n.",
+    "cn_meanings": ["咒语", "咒文"],
+    "cn_keywords": ["咒语", "念咒", "咒文"]
+  },
+  {
+    "word": "generation",
+    "phonetic": "/ˌdʒenəˈreɪʃn/",
+    "pos": "n.",
+    "cn_meanings": ["一代人", "世代"],
+    "cn_keywords": ["祖祖辈辈", "世代", "一代代", "辈辈"]
+  },
+  {
+    "word": "proverb",
+    "phonetic": "/ˈprɒvɜːrb/",
+    "pos": "n.",
+    "cn_meanings": ["谚语", "俗语"],
+    "cn_keywords": ["老话", "谚语", "俗话", "古话"]
+  },
+  {
+    "word": "hide",
+    "phonetic": "/haɪd/",
+    "pos": "v.",
+    "cn_meanings": ["隐藏", "躲藏"],
+    "cn_keywords": ["藏", "隐藏", "躲藏", "无处藏"]
+  },
+  {
+    "word": "destiny",
+    "phonetic": "/ˈdestɪni/",
+    "pos": "n.",
+    "cn_meanings": ["命运", "天命"],
+    "cn_keywords": ["命运", "天命", "命数"]
+  },
+  {
+    "word": "lonely",
+    "phonetic": "/ˈloʊnli/",
+    "pos": "adj.",
+    "cn_meanings": ["孤独的", "寂寞的"],
+    "cn_keywords": ["孤苦伶仃", "孤独", "孤苦", "寂寞"]
+  },
+  {
+    "word": "peach",
+    "phonetic": "/piːtʃ/",
+    "pos": "n.",
+    "cn_meanings": ["桃", "桃子"],
+    "cn_keywords": ["桃", "桃枝", "桃树"]
+  },
+  {
+    "word": "branch",
+    "phonetic": "/bræntʃ/",
+    "pos": "n.",
+    "cn_meanings": ["树枝", "分支"],
+    "cn_keywords": ["枝", "树枝", "枝条"]
+  },
+  {
+    "word": "wooden",
+    "phonetic": "/ˈwʊdn/",
+    "pos": "adj.",
+    "cn_meanings": ["木制的", "木头的"],
+    "cn_keywords": ["木", "木制", "木质", "木头"]
+  },
+  {
+    "word": "bed",
+    "phonetic": "/bed/",
+    "pos": "n.",
+    "cn_meanings": ["床"],
+    "cn_keywords": ["床", "木床", "床铺"]
+  },
+  {
+    "word": "human",
+    "phonetic": "/ˈhjuːmən/",
+    "pos": "n./adj.",
+    "cn_meanings": ["人类", "人的"],
+    "cn_keywords": ["人间", "人类", "世人"]
+  }
+]

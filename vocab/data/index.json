@@ -1,0 +1,17 @@
+{
+  "cet4": {
+    "file": "cet4.json",
+    "count": 4499,
+    "description": "CET-4 词汇（有道+新东方合并）"
+  },
+  "cet6": {
+    "file": "cet6.json",
+    "count": 2126,
+    "description": "CET-6 词汇"
+  },
+  "kaoyan": {
+    "file": "kaoyan.json",
+    "count": 5101,
+    "description": "考研词汇"
+  }
+}

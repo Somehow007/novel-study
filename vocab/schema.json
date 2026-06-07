@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Novel Study 词库条目",
+  "description": "词库 JSON 文件中每个条目的格式定义",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["word", "pos", "cn_meanings", "cn_keywords"],
+    "properties": {
+      "word": {
+        "type": "string",
+        "description": "英文单词或短语",
+        "minLength": 1
+      },
+      "phonetic": {
+        "type": "string",
+        "description": "音标，格式如 /əˈbændən/"
+      },
+      "pos": {
+        "type": "string",
+        "description": "词性，如 n. / v. / adj. / adv. / phrase"
+      },
+      "cn_meanings": {
+        "type": "array",
+        "description": "中文释义列表",
+        "minItems": 1,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "cn_keywords": {
+        "type": "array",
+        "description": "中文关键词列表，用于反向匹配小说文本",
+        "minItems": 1,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "level": {
+        "type": "string",
+        "description": "词库等级：cet4/cet6/kaoyan/ielts"
+      }
+    },
+    "additionalProperties": false
+  }
+}

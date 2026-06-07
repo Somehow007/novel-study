@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Novel Study - 小说英语词汇填充</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: #f5f5f5; color: #333; min-height: 100vh; }
+.container { max-width: 900px; margin: 0 auto; padding: 24px 16px; }
+h1 { font-size: 24px; margin-bottom: 24px; text-align: center; }
+
+.card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.card h2 { font-size: 16px; margin-bottom: 12px; color: #555; }
+
+/* 上传区 */
+.upload-zone {
+    border: 2px dashed #ccc; border-radius: 8px; padding: 40px 20px;
+    text-align: center; cursor: pointer; transition: all 0.2s;
+}
+.upload-zone:hover, .upload-zone.dragover { border-color: #4a90d9; background: #f0f7ff; }
+.upload-zone p { color: #888; margin-top: 8px; }
+.upload-zone .filename { color: #4a90d9; font-weight: 600; font-size: 16px; }
+.upload-zone .filesize { color: #999; font-size: 13px; }
+#fileInput { display: none; }
+
+/* 词库选择 */
+.vocab-options { display: flex; gap: 16px; flex-wrap: wrap; }
+.vocab-options label { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 6px 12px; border: 1px solid #ddd; border-radius: 6px; transition: all 0.15s; }
+.vocab-options label:has(input:checked) { border-color: #4a90d9; background: #f0f7ff; }
+.vocab-options input[type="checkbox"] { accent-color: #4a90d9; }
+
+/* 参数 */
+.params { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.param-item label { display: block; font-size: 13px; color: #666; margin-bottom: 4px; }
+.param-item input[type="range"] { width: 100%; accent-color: #4a90d9; }
+.param-item .param-row { display: flex; align-items: center; gap: 8px; }
+.param-item input[type="number"] { width: 60px; padding: 4px 6px; border: 1px solid #ddd; border-radius: 4px; text-align: center; }
+.param-item .range-val { font-size: 13px; color: #4a90d9; min-width: 30px; }
+
+/* 按钮 */
+.btn { padding: 10px 28px; border: none; border-radius: 6px; font-size: 15px; cursor: pointer; transition: all 0.15s; }
+.btn-primary { background: #4a90d9; color: #fff; }
+.btn-primary:hover { background: #3a7bc8; }
+.btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+.btn-download { background: #52c41a; color: #fff; }
+.btn-download:hover { background: #45a817; }
+.actions { display: flex; gap: 12px; justify-content: center; margin-top: 16px; }
+
+/* 统计 */
+.stats { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin-top: 12px; }
+.stats .stat { text-align: center; }
+.stats .stat-val { font-size: 20px; font-weight: 700; color: #4a90d9; }
+.stats .stat-label { font-size: 12px; color: #999; }
+
+/* 结果 */
+.result-area { background: #fafafa; border: 1px solid #eee; border-radius: 6px; padding: 16px; max-height: 500px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; line-height: 1.8; font-size: 14px; }
+.result-area .anno { background: #fff3cd; padding: 1px 3px; border-radius: 3px; color: #856404; }
+
+/* 加载 */
+.loading { text-align: center; padding: 40px; color: #888; }
+.spinner { display: inline-block; width: 24px; height: 24px; border: 3px solid #ddd; border-top-color: #4a90d9; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.error { color: #e74c3c; text-align: center; padding: 12px; }
+
+.hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h1>Novel Study - 小说英语词汇填充</h1>
+
+    <!-- 上传 -->
+    <div class="card">
+        <h2>1. 上传文件</h2>
+        <div class="upload-zone" id="uploadZone">
+            <div id="uploadPrompt">
+                <p>点击或拖拽上传 .txt 文件（最大 10MB）</p>
+            </div>
+            <div id="fileInfo" class="hidden">
+                <div class="filename" id="fileName"></div>
+                <div class="filesize" id="fileSize"></div>
+            </div>
+        </div>
+        <input type="file" id="fileInput" accept=".txt">
+    </div>
+
+    <!-- 词库 -->
+    <div class="card">
+        <h2>2. 选择词库</h2>
+        <div class="vocab-options" id="vocabOptions">
+            <label><input type="checkbox" name="vocab" value="cet4" checked> CET-4</label>
+            <label><input type="checkbox" name="vocab" value="cet6" checked> CET-6</label>
+            <label><input type="checkbox" name="vocab" value="kaoyan" checked> 考研</label>
+        </div>
+    </div>
+
+    <!-- 参数 -->
+    <div class="card">
+        <h2>3. 密度参数</h2>
+        <div class="params">
+            <div class="param-item">
+                <label>每句最多标注</label>
+                <div class="param-row">
+                    <input type="range" id="maxSentence" min="1" max="5" value="3" step="1">
+                    <span class="range-val" id="maxSentenceVal">3</span>
+                </div>
+            </div>
+            <div class="param-item">
+                <label>每 N 字符限制</label>
+                <div class="param-row">
+                    <input type="range" id="maxChars" min="50" max="200" value="100" step="10">
+                    <span class="range-val" id="maxCharsVal">100</span>
+                </div>
+            </div>
+            <div class="param-item">
+                <label>最低难度分</label>
+                <div class="param-row">
+                    <input type="range" id="minScore" min="0.5" max="3.5" value="1.5" step="0.5">
+                    <span class="range-val" id="minScoreVal">1.5</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 操作 -->
+    <div class="actions">
+        <button class="btn btn-primary" id="submitBtn">开始处理</button>
+        <button class="btn btn-download hidden" id="downloadBtn">下载结果</button>
+    </div>
+
+    <!-- 加载 -->
+    <div class="loading hidden" id="loading">
+        <div class="spinner"></div>正在处理，请稍候...
+    </div>
+
+    <!-- 错误 -->
+    <div class="error hidden" id="error"></div>
+
+    <!-- 统计 -->
+    <div class="card hidden" id="statsCard">
+        <h2>处理统计</h2>
+        <div class="stats" id="stats"></div>
+    </div>
+
+    <!-- 结果 -->
+    <div class="card hidden" id="resultCard">
+        <h2>注释结果预览</h2>
+        <div class="result-area" id="resultArea"></div>
+    </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let lastResult = null;
+let lastFilename = '';
+
+// 滑块联动
+for (const [id, valId] of [['maxSentence','maxSentenceVal'],['maxChars','maxCharsVal'],['minScore','minScoreVal']]) {
+    $(id).addEventListener('input', e => $(valId).textContent = e.target.value);
+}
+
+// 上传区
+const uploadZone = $('uploadZone');
+const fileInput = $('fileInput');
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; showFile(e.dataTransfer.files[0]); }
+});
+fileInput.addEventListener('change', e => { if (e.target.files.length) showFile(e.target.files[0]); });
+
+function showFile(file) {
+    $('uploadPrompt').classList.add('hidden');
+    $('fileInfo').classList.remove('hidden');
+    $('fileName').textContent = file.name;
+    $('fileSize').textContent = (file.size / 1024).toFixed(1) + ' KB';
+}
+
+// 提交
+$('submitBtn').addEventListener('click', async () => {
+    const file = fileInput.files[0];
+    if (!file) { showError('请先上传文件'); return; }
+
+    const vocabs = [...document.querySelectorAll('input[name="vocab"]:checked')].map(c => c.value);
+    if (!vocabs.length) { showError('请至少选择一个词库'); return; }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('vocab', vocabs.join(','));
+    formData.append('max_per_sentence', $('maxSentence').value);
+    formData.append('max_per_chars', $('maxChars').value);
+    formData.append('min_score', $('minScore').value);
+
+    hideError();
+    setLoading(true);
+
+    try {
+        const resp = await fetch('/api/annotate', { method: 'POST', body: formData });
+        const data = await resp.json();
+        if (!resp.ok) { showError(data.detail || '处理失败'); return; }
+
+        lastResult = data.result;
+        lastFilename = data.filename.replace(/\.txt$/, '_annotated.txt');
+        showResult(data);
+    } catch (e) {
+        showError('请求失败: ' + e.message);
+    } finally {
+        setLoading(false);
+    }
+});
+
+// 下载
+$('downloadBtn').addEventListener('click', () => {
+    if (!lastResult) return;
+    const blob = new Blob([lastResult], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = lastFilename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+});
+
+function showResult(data) {
+    const s = data.stats;
+    $('stats').innerHTML = `
+        <div class="stat"><div class="stat-val">${s.total_tokens}</div><div class="stat-label">总词数</div></div>
+        <div class="stat"><div class="stat-val">${s.total_matched}</div><div class="stat-label">匹配命中</div></div>
+        <div class="stat"><div class="stat-val">${s.total_filtered}</div><div class="stat-label">过滤后</div></div>
+        <div class="stat"><div class="stat-val">${s.filter_rate}%</div><div class="stat-label">过滤率</div></div>
+    `;
+    $('statsCard').classList.remove('hidden');
+
+    // 高亮注释：将 (word [pos] meaning) 格式用 span 包裹
+    const escaped = data.result.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const highlighted = escaped.replace(/(\([^)]+\[.+?\][^)]*\))/g, '<span class="anno">$1</span>');
+    $('resultArea').innerHTML = highlighted;
+    $('resultCard').classList.remove('hidden');
+    $('downloadBtn').classList.remove('hidden');
+}
+
+function setLoading(on) {
+    $('submitBtn').disabled = on;
+    $('loading').classList.toggle('hidden', !on);
+}
+function showError(msg) { $('error').textContent = msg; $('error').classList.remove('hidden'); }
+function hideError() { $('error').classList.add('hidden'); }
+</script>
+</body>
+</html>
