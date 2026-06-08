@@ -25,42 +25,65 @@
 
 ## 📦 快速开始
 
-### 1. 安装 uv（一行命令）
+### 一键安装（推荐）
 
 ```bash
-# Windows (PowerShell)
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-
-# macOS / Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/Somehow007/novel-study/main/install.sh | bash
 ```
 
-### 2. 克隆 & 安装依赖
+安装完成后直接使用 `ns` 命令：
 
 ```bash
+ns --help                              # 查看帮助
+ns fetch https://example.com/book/123/ # 爬取小说
+ns annotate novel.txt                  # 注释文本
+ns serve                               # 启动 Web 服务
+ns config show                         # 查看配置
+```
+
+### 手动安装
+
+```bash
+# 1. 安装 uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# 2. 克隆 & 安装依赖
 git clone https://github.com/Somehow007/novel-study.git
 cd novel-study
 uv sync
-```
 
-> 首次运行会自动下载 jieba 词典和词库数据，无需手动操作。
-
-### 3. 启动
-
-```bash
-# Web 界面（推荐）
-uv run uvicorn app:app --host 0.0.0.0 --port 8000
-
-# 命令行处理
-uv run python main.py sample.txt
-
-# 命令行爬取小说
-uv run python scripts/fetch_novel.py https://www.example.com/book/12345/
+# 3. 启动
+uv run uvicorn app:app --host 0.0.0.0 --port 8000  # Web 界面
+uv run python cli.py fetch <URL>                     # 命令行爬取
+uv run python main.py sample.txt                     # 命令行注释
 ```
 
 打开浏览器访问 `http://localhost:8000` 即可使用 Web 界面。
 
 ## 🚀 使用指南
+
+### CLI 命令 (`ns`)
+
+```bash
+# 爬取小说
+ns fetch https://www.example.com/book/12345/
+ns fetch <URL> --threads 5 --delay 1 --resume
+
+# 注释文本
+ns annotate novel.txt
+ns annotate novel.txt --vocab cet6,kaoyan --min-score 2.0
+
+# 词库 & 配置
+ns vocab list
+ns config show
+ns config set default_threads 8
+
+# Web 服务
+ns serve --port 8000
+
+# 自更新
+ns update
+```
 
 ### Web 界面
 
@@ -123,6 +146,9 @@ uv run python scripts/fetch_novel.py <URL> --proxy http://127.0.0.1:7890
 
 ```
 novel-study/
+├── cli.py                 # CLI 入口（ns 命令）
+├── config.py              # 配置管理
+├── install.sh             # 一键安装脚本
 ├── app.py                 # FastAPI Web API
 ├── main.py                # 核心处理流程
 ├── core/
