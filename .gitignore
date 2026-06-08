@@ -28,3 +28,7 @@ data/*.progress.json
 !data/sample*.txt
 data/*/
 DEVELOPMENT_PLAN.md
+
+# PyInstaller build artifacts
+dist/
+build/
