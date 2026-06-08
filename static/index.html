@@ -126,9 +126,9 @@ h1 { font-size: 24px; margin-bottom: 24px; text-align: center; }
                     </div>
                 </div>
                 <div class="param-item">
-                    <label>并发线程</label>
+                    <label>并发线程 <small id="threadsHint" style="color:var(--muted);font-weight:normal"></small></label>
                     <div class="param-row">
-                        <input type="range" id="fetchThreads" min="1" max="10" value="3" step="1">
+                        <input type="range" id="fetchThreads" min="1" max="16" value="3" step="1">
                         <span class="range-val" id="fetchThreadsVal">3</span>
                     </div>
                 </div>
@@ -272,6 +272,16 @@ for (const [id, valId] of [
 ]) {
     $(id).addEventListener('input', e => $(valId).textContent = e.target.value);
 }
+
+// ── 动态获取系统最大线程数 ──
+fetch('/api/system/info').then(r => r.json()).then(info => {
+    const max = info.max_threads;
+    const slider = $('fetchThreads');
+    const hint = $('threadsHint');
+    slider.max = max;
+    if (parseInt(slider.value) > max) { slider.value = max; $('fetchThreadsVal').textContent = max; }
+    hint.textContent = `(1-${max})`;
+}).catch(() => {});
 
 // ── 上传区 ──
 const uploadZone = $('uploadZone');

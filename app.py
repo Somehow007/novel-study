@@ -23,7 +23,7 @@ from vocab.loader import get_available_vocabs, load_vocab
 
 # scripts/ 目录加入 sys.path 以便导入 fetch_novel
 sys.path.insert(0, str(Path(__file__).parent / "scripts"))
-from fetch_novel import AntiCrawlDetected, fetch_novel
+from fetch_novel import AntiCrawlDetected, fetch_novel, get_max_threads
 
 app = FastAPI(title="Novel Study", description="小说英语词汇填充工具")
 
@@ -72,6 +72,12 @@ def _cleanup_tasks():
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/api/system/info")
+async def system_info():
+    """返回系统信息，供前端动态调整参数范围。"""
+    return {"max_threads": get_max_threads()}
 
 
 @app.get("/api/vocabs")
@@ -193,7 +199,7 @@ async def fetch_stream(
     start: int = Query(None, ge=1, description="起始章节"),
     end: int = Query(None, ge=1, description="结束章节"),
     delay: float = Query(0.5, ge=0.1, le=10, description="请求间隔(秒)"),
-    threads: int = Query(3, ge=1, le=10, description="并发线程数"),
+    threads: int = Query(3, ge=1, description="并发线程数"),
     encoding: str = Query(None, description="强制编码"),
 ):
     """SSE 流式爬取小说，实时推送进度。"""

@@ -16,6 +16,7 @@
 
 import argparse
 import json
+import os
 import random
 import re
 import sys
@@ -37,6 +38,17 @@ DEFAULT_BATCH = 50
 MAX_RETRIES = 3
 RETRY_BACKOFF = 2.0
 MAX_CONSECUTIVE_FAILS = 10  # 连续失败 N 章自动中止
+
+
+def get_max_threads() -> int:
+    """获取推荐的最大并发下载线程数。
+
+    爬取是 I/O 密集型任务（HTTP 请求 + sleep 等待），不受 GIL 限制，
+    可以使用比 CPU 核心数更多的线程。但不宜过多，避免目标站点封禁。
+    业内爬虫框架典型范围：Scrapy 默认 16，aiohttp 建议 10-50。
+    """
+    return min((os.cpu_count() or 2) * 2, 16)
+
 
 # cloudscraper 懒加载单例（用于绕过 Cloudflare JS 挑战）
 _cloud_scraper = None
@@ -120,6 +132,7 @@ AD_KEYWORDS = [
     "记住网址", "手机端", "app下载", "最快更新",
     "本章未完，请点击下一页继续", "阅读最新章节",
     "上一章", "下一章", "章节目录", "保存书签",
+    "返回列表", "返回目录", "马上记住", "记住书斋",
 ]
 
 
@@ -662,6 +675,11 @@ def parse_toc(session, url: str) -> tuple:
             if not href or not title or href in ("#", "javascript:void(0)", "javascript:;"):
                 continue
 
+            # 过滤非章节链接（导航按钮等）
+            if title in ("开始阅读", "立即阅读", "马上阅读", "点击阅读",
+                         "免费阅读", "在线阅读", "正文", "返回列表", "返回目录"):
+                continue
+
             if href.startswith("//"):
                 href = urllib.parse.urlparse(url).scheme + ":" + href
             elif href.startswith("/"):
@@ -672,6 +690,8 @@ def parse_toc(session, url: str) -> tuple:
             if href in seen:
                 continue
             seen.add(href)
+            # 去掉 TOC 列表序号前缀（如 "1.第1章" → "第1章"）
+            title = re.sub(r"^\d+[.、]\s*", "", title)
             chapters.append({"index": len(chapters), "title": title, "url": href})
 
         # 查找目录"下一页"链接（排除章节分页的"下一页"）
@@ -788,6 +808,9 @@ def download_chapter(session, chapter: dict,
         else:
             title = chapter["title"]
 
+        # 去掉 TOC 列表序号前缀（如 "1.第1章" → "第1章"）
+        title = re.sub(r"^\d+[.、]\s*", "", title)
+
         el = _extract_content(soup, content_sel)
         if not el:
             return {"index": idx, "title": title, "content": "", "error": "未找到正文"}
@@ -839,6 +862,11 @@ def clean_chapter_text(text: str) -> str:
         if re.match(r"^https?://\S+$", line) or re.match(r"^www\.\S+$", line):
             continue
         cleaned.append(line)
+
+    # 去掉开头的章节标题导航行（如 "第2章 斗气大陆"）
+    while cleaned and len(cleaned[0]) < 30 and re.match(r"^第\s*\d+\s*章", cleaned[0]):
+        cleaned.pop(0)
+
     text = "\n".join(cleaned)
     return re.sub(r"\n{3,}", "\n\n", text).strip()
 
@@ -880,6 +908,13 @@ def fetch_novel(url: str, output_dir: str | None = None,
                 encoding: str | None = None,
                 proxy: str | None = None,
                 progress_callback=None) -> Path:
+
+    # 线程数上限校验
+    max_t = get_max_threads()
+    if threads > max_t:
+        if not progress_callback:  # CLI 模式才打印
+            print(f"[提示] 线程数 {threads} 超过推荐上限 {max_t}，已自动调整")
+        threads = max_t
 
     session = create_session(proxy)
 
@@ -1141,7 +1176,7 @@ def main():
     parser.add_argument("--start", type=int, help="起始章节（从 1 开始）")
     parser.add_argument("--end", type=int, help="结束章节（包含）")
     parser.add_argument("--threads", type=int, default=DEFAULT_THREADS,
-                        help=f"并发下载线程数（默认 {DEFAULT_THREADS}）")
+                        help=f"并发下载线程数（默认 {DEFAULT_THREADS}，上限 {get_max_threads()}）")
     parser.add_argument("--batch", type=int, default=DEFAULT_BATCH,
                         help=f"每多少章写入一次文件（默认 {DEFAULT_BATCH}）")
     parser.add_argument("--delay", type=float, default=DEFAULT_DELAY,

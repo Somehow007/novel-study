@@ -98,7 +98,7 @@ uv run python scripts/fetch_novel.py <URL> --start 10 --end 50
 # 断点续传
 uv run python scripts/fetch_novel.py <URL> --resume
 
-# 调整并发和延迟
+# 调整并发和延迟（线程数超过系统上限会自动调整）
 uv run python scripts/fetch_novel.py <URL> --threads 5 --delay 1
 
 # 使用代理
@@ -117,6 +117,7 @@ uv run python scripts/fetch_novel.py <URL> --proxy http://127.0.0.1:7890
 | `/api/vocabs` | GET | 获取可用词库列表 |
 | `/api/download` | GET | 下载爬取结果文件 |
 | `/api/health` | GET | 健康检查 |
+| `/api/system/info` | GET | 系统信息（最大线程数等） |
 
 ## 📁 项目结构
 
