@@ -2,12 +2,13 @@
 """
 PyInstaller spec — ns CLI 打包配置
 
-只打包命令行相关代码，不包含 Web 服务（app.py、fastapi、uvicorn）。
+使用 --onedir 模式（非 --onefile），启动速度快，无需每次解压。
 
 构建：
     pyinstaller ns.spec
 
-产物：dist/ns（单文件可执行）
+产物：dist/ns/ 目录（内含可执行文件和依赖）
+打包分发：cd dist && tar czf ns-macos-arm64.tar.gz ns/
 """
 
 import os
@@ -21,50 +22,31 @@ import jieba
 JIEBA_DIR = os.path.dirname(jieba.__file__)
 
 datas = [
-    # jieba 主词典
     (os.path.join(JIEBA_DIR, "dict.txt"), "jieba"),
-    # 词库数据
     (os.path.join(ROOT, "vocab", "data"), os.path.join("vocab", "data")),
 ]
 
 # ── 隐藏导入 ─────────────────────────────────────────────────────
 
 hiddenimports = [
-    # cloudscraper 动态导入
     "cloudscraper",
     "cloudscraper.captcha",
     "cloudscraper.exceptions",
     "js2py",
-    # curl_cffi
     "curl_cffi",
     "curl_cffi.requests",
-    # jieba
     "jieba",
     "jieba.posseg",
 ]
 
-# ── 排除模块（减小体积，不打包 Web 相关） ─────────────────────────
+# ── 排除模块 ─────────────────────────────────────────────────────
 
 excludes = [
-    # Web 服务（CLI 不需要）
-    "app",
-    "fastapi",
-    "uvicorn",
-    "starlette",
-    "pydantic",
-    "httpcore",
-    "httpx",
-    "anyio",
-    # 测试
-    "pytest",
-    "unittest",
-    # GUI
-    "tkinter",
-    "matplotlib",
-    # 科学计算
-    "numpy",
-    "scipy",
-    "pandas",
+    "app", "fastapi", "uvicorn", "starlette", "pydantic",
+    "httpcore", "httpx", "anyio",
+    "pytest", "unittest",
+    "tkinter", "matplotlib",
+    "numpy", "scipy", "pandas",
 ]
 
 # ── 分析 ─────────────────────────────────────────────────────────
@@ -82,24 +64,30 @@ a = Analysis(
     noarchive=False,
 )
 
-# ── 打包为单文件 ─────────────────────────────────────────────────
+# ── onedir 模式：不解压，直接运行 ─────────────────────────────────
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
+    exclude_binaries=True,
     name="ns",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,             # 需要安装 upx：brew install upx
-    upx_exclude=[],
-    runtime_tmpdir=None,
+    upx=True,
     console=True,
-    disable_windowed_traceback=False,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name="ns",
 )

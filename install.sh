@@ -3,9 +3,10 @@ set -e
 
 REPO="Somehow007/novel-study"
 BIN_NAME="ns"
+INSTALL_DIR="$HOME/.novel-study"
 BIN_DIR="$HOME/.local/bin"
 
-# ── 输出函数（简洁、干净）────────────────────────────────────────
+# ── 输出函数 ─────────────────────────────────────────────────────
 
 step()  { printf "\n→ %s\n" "$*"; }
 ok()    { printf "  ✓ %s\n" "$*"; }
@@ -44,11 +45,11 @@ ok "$PLATFORM"
 
 # 2. 确定下载文件
 case "$PLATFORM" in
-    macos-arm64)  FILENAME="ns-macos-arm64" ;;
-    macos-x64)    FILENAME="ns-macos-x64" ;;
-    linux-x64)    FILENAME="ns-linux-x64" ;;
-    linux-arm64)  FILENAME="ns-linux-arm64" ;;
-    windows-*)    FILENAME="ns-windows.exe" ;;
+    macos-arm64)  FILENAME="ns-macos-arm64.tar.gz" ;;
+    macos-x64)    FILENAME="ns-macos-x64.tar.gz" ;;
+    linux-x64)    FILENAME="ns-linux-x64.tar.gz" ;;
+    linux-arm64)  FILENAME="ns-linux-arm64.tar.gz" ;;
+    windows-*)    FILENAME="ns-windows.zip" ;;
 esac
 
 # 3. 获取最新版本
@@ -66,32 +67,58 @@ fi
 
 # 4. 下载
 step "下载 $FILENAME"
-TMP_FILE=$(mktemp 2>/dev/null || mktemp -t ns)
-trap "rm -f '$TMP_FILE'" EXIT
+TMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t ns)
+trap "rm -rf '$TMP_DIR'" EXIT
 
 if command -v curl &>/dev/null; then
-    curl -fsSL "$DOWNLOAD_URL" -o "$TMP_FILE"
+    curl -fsSL "$DOWNLOAD_URL" -o "$TMP_DIR/$FILENAME"
 elif command -v wget &>/dev/null; then
-    wget -q "$DOWNLOAD_URL" -O "$TMP_FILE"
+    wget -q "$DOWNLOAD_URL" -O "$TMP_DIR/$FILENAME"
 else
     fail "需要 curl 或 wget"
 fi
 
-if [ ! -s "$TMP_FILE" ]; then
+if [ ! -s "$TMP_DIR/$FILENAME" ]; then
     fail "下载失败，请检查网络或手动下载:"
     echo "  https://github.com/$REPO/releases"
 fi
 ok "下载完成"
 
-# 5. 安装
-step "安装到 $BIN_DIR"
-mkdir -p "$BIN_DIR"
-DEST="$BIN_DIR/$BIN_NAME"
-mv "$TMP_FILE" "$DEST"
-chmod +x "$DEST"
-ok "$DEST"
+# 5. 解压到安装目录
+step "安装到 $INSTALL_DIR"
 
-# 6. PATH 检查
+# 清理旧版本
+rm -rf "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR"
+
+cd "$TMP_DIR"
+if [[ "$FILENAME" == *.tar.gz ]]; then
+    tar xzf "$FILENAME"
+elif [[ "$FILENAME" == *.zip ]]; then
+    unzip -q "$FILENAME"
+fi
+
+if [ ! -f "$TMP_DIR/ns/$BIN_NAME" ]; then
+    fail "解压后未找到 ns 可执行文件"
+fi
+
+# 移动整个目录（包含 _internal 依赖）
+mv "$TMP_DIR/ns" "$INSTALL_DIR/ns"
+chmod +x "$INSTALL_DIR/ns/$BIN_NAME"
+ok "$INSTALL_DIR/ns/$BIN_NAME"
+
+# 6. 创建 wrapper 到 PATH 目录
+step "配置命令"
+mkdir -p "$BIN_DIR"
+
+cat > "$BIN_DIR/$BIN_NAME" << EOF
+#!/usr/bin/env bash
+exec "$INSTALL_DIR/ns/$BIN_NAME" "\$@"
+EOF
+chmod +x "$BIN_DIR/$BIN_NAME"
+ok "$BIN_DIR/$BIN_NAME → $INSTALL_DIR/ns/$BIN_NAME"
+
+# 7. PATH 检查
 step "检查环境变量"
 case ":$PATH:" in
     *":$BIN_DIR:"*)
@@ -120,7 +147,15 @@ case ":$PATH:" in
         ;;
 esac
 
-# 7. 完成
+# 8. 验证
+step "验证安装"
+if "$BIN_DIR/$BIN_NAME" --version >/dev/null 2>&1; then
+    ok "$($BIN_DIR/$BIN_NAME --version)"
+else
+    warn "安装完成但验证失败，尝试运行 ns --help"
+fi
+
+# 9. 完成
 echo ""
 echo "┌─────────────────────────────────────┐"
 echo "│   ✅ 安装完成！                      │"
