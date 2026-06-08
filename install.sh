@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 set -e
 
-REPO_URL="https://github.com/Somehow007/novel-study.git"
-INSTALL_DIR="$HOME/.novel-study"
+# ── Novel Study CLI 一键安装脚本 ─────────────────────────────────
+#
+# 用法：
+#   curl -sSL https://raw.githubusercontent.com/Somehow007/novel-study/main/install.sh | bash
+#
+# 自动识别系统和架构，下载对应可执行文件，放到 PATH 中。
+
+REPO="Somehow007/novel-study"
+BIN_NAME="ns"
 BIN_DIR="$HOME/.local/bin"
-NS_BIN="$BIN_DIR/ns"
 
 # ── 颜色 ────────────────────────────────────────────────────────
 
@@ -15,122 +21,133 @@ BOLD='\033[1m'
 DIM='\033[2m'
 NC='\033[0m'
 
-ok()   { echo -e "${GREEN}[OK]${NC} $*"; }
+ok()   { echo -e "${GREEN}✓${NC} $*"; }
 info() { echo -e "${BOLD}$*${NC}"; }
-warn() { echo -e "${YELLOW}[提示]${NC} $*"; }
-err()  { echo -e "${RED}[错误]${NC} $*"; exit 1; }
+warn() { echo -e "${YELLOW}!${NC} $*"; }
+err()  { echo -e "${RED}✗${NC} $*"; exit 1; }
 
-# ── 环境检查 ─────────────────────────────────────────────────────
+# ── 检测系统和架构 ──────────────────────────────────────────────
 
-info "📦 Novel Study 安装脚本"
+detect_platform() {
+    local os arch
+
+    case "$(uname -s)" in
+        Darwin*)  os="macos" ;;
+        Linux*)   os="linux" ;;
+        MINGW*|MSYS*|CYGWIN*) os="windows" ;;
+        *) err "不支持的操作系统: $(uname -s)" ;;
+    esac
+
+    case "$(uname -m)" in
+        x86_64|amd64)  arch="x64" ;;
+        aarch64|arm64) arch="arm64" ;;
+        *) err "不支持的架构: $(uname -m)" ;;
+    esac
+
+    echo "${os}-${arch}"
+}
+
+# ── 下载工具（优先 curl，回退 wget）─────────────────────────────
+
+download() {
+    local url="$1" output="$2"
+    if command -v curl &>/dev/null; then
+        curl -fSL --progress-bar "$url" -o "$output"
+    elif command -v wget &>/dev/null; then
+        wget -q --show-progress "$url" -O "$output"
+    else
+        err "需要 curl 或 wget，请先安装其中一个"
+    fi
+}
+
+# ── 主流程 ──────────────────────────────────────────────────────
+
+info "📦 Novel Study CLI 安装脚本"
 echo ""
 
-# Python 版本检查
-if ! command -v python3 &>/dev/null; then
-    err "未找到 python3，请先安装 Python 3.12+"
-fi
+# 1. 检测平台
+PLATFORM=$(detect_platform)
+ok "检测到平台: $PLATFORM"
 
-PY_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-PY_MAJOR=$(echo "$PY_VERSION" | cut -d. -f1)
-PY_MINOR=$(echo "$PY_VERSION" | cut -d. -f2)
+# 2. 确定下载文件名
+case "$PLATFORM" in
+    macos-arm64)  FILENAME="ns-macos-arm64" ;;
+    macos-x64)    FILENAME="ns-macos-x64" ;;
+    linux-x64)    FILENAME="ns-linux-x64" ;;
+    linux-arm64)  FILENAME="ns-linux-arm64" ;;
+    windows-*)    FILENAME="ns-windows.exe" ;;
+esac
 
-if [ "$PY_MAJOR" -lt 3 ] || ([ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 12 ]); then
-    err "Python 版本过低（当前 $PY_VERSION），需要 3.12+"
-fi
-ok "Python $PY_VERSION"
+# 3. 获取最新版本号
+info "获取最新版本..."
+LATEST=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null \
+    | grep '"tag_name"' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
 
-# git 检查
-if ! command -v git &>/dev/null; then
-    err "未找到 git，请先安装 git"
-fi
-ok "git $(git --version | awk '{print $3}')"
-
-# ── 克隆/更新仓库 ────────────────────────────────────────────────
-
-if [ -d "$INSTALL_DIR/.git" ]; then
-    info "🔄 更新已有安装..."
-    cd "$INSTALL_DIR"
-    git pull --ff-only 2>/dev/null || warn "git pull 失败，使用现有版本"
-    ok "仓库已更新"
+if [ -z "$LATEST" ]; then
+    warn "无法获取版本号，使用 main 分支"
+    DOWNLOAD_URL="https://github.com/$REPO/releases/latest/download/$FILENAME"
 else
-    info "📥 下载项目..."
-    git clone "$REPO_URL" "$INSTALL_DIR"
-    ok "已克隆到 $INSTALL_DIR"
+    ok "最新版本: $LATEST"
+    DOWNLOAD_URL="https://github.com/$REPO/releases/download/$LATEST/$FILENAME"
 fi
 
-cd "$INSTALL_DIR"
+# 4. 下载
+TMP_FILE=$(mktemp 2>/dev/null || mktemp -t ns)
+trap "rm -f '$TMP_FILE'" EXIT
 
-# ── 安装依赖 ─────────────────────────────────────────────────────
+info "下载 $FILENAME ..."
+download "$DOWNLOAD_URL" "$TMP_FILE"
 
-info "📦 安装依赖..."
-
-if command -v uv &>/dev/null; then
-    ok "使用 uv 安装"
-    uv sync --quiet 2>/dev/null || uv sync
-else
-    warn "未找到 uv，使用 pip 安装（建议安装 uv 以获得更好体验）"
-    python3 -m pip install -e . --quiet --break-system-packages 2>/dev/null \
-        || python3 -m pip install -e . --quiet
+if [ ! -s "$TMP_FILE" ]; then
+    err "下载失败，请检查网络或手动下载: https://github.com/$REPO/releases"
 fi
+ok "下载完成"
 
-ok "依赖安装完成"
-
-# ── 创建 ns 命令 ─────────────────────────────────────────────────
-
-info "🔗 创建 ns 命令..."
-
+# 5. 安装
 mkdir -p "$BIN_DIR"
 
-cat > "$NS_BIN" << 'WRAPPER'
-#!/usr/bin/env bash
-# ns — Novel Study CLI wrapper
-INSTALL_DIR="$HOME/.novel-study"
+DEST="$BIN_DIR/$BIN_NAME"
+[ "$PLATFORM" = "windows-"* ] && DEST="$DEST.exe"
 
-if command -v uv &>/dev/null; then
-    cd "$INSTALL_DIR" && exec uv run python cli.py "$@"
-else
-    cd "$INSTALL_DIR" && exec python3 cli.py "$@"
-fi
-WRAPPER
+mv "$TMP_FILE" "$DEST"
+chmod +x "$DEST"
+ok "已安装到 $DEST"
 
-chmod +x "$NS_BIN"
-ok "已创建 $NS_BIN"
-
-# ── PATH 检查 ────────────────────────────────────────────────────
-
+# 6. PATH 检查
 case ":$PATH:" in
     *":$BIN_DIR:"*)
         ok "~/.local/bin 已在 PATH 中"
         ;;
     *)
-        warn "~/.local/bin 不在 PATH 中，正在添加..."
+        warn "~/.local/bin 不在 PATH 中，正在配置..."
 
-        # 检测 shell 配置文件
         SHELL_NAME=$(basename "$SHELL")
         case "$SHELL_NAME" in
             zsh)  RC_FILE="$HOME/.zshrc" ;;
             bash) RC_FILE="$HOME/.bashrc" ;;
+            fish) RC_FILE="$HOME/.config/fish/config.fish" ;;
             *)    RC_FILE="$HOME/.profile" ;;
         esac
 
-        # 添加到 PATH
-        echo '' >> "$RC_FILE"
-        echo '# Novel Study CLI' >> "$RC_FILE"
-        echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$RC_FILE"
+        if [ "$SHELL_NAME" = "fish" ]; then
+            echo "set -gx PATH $BIN_DIR \$PATH" >> "$RC_FILE"
+        else
+            echo '' >> "$RC_FILE"
+            echo '# Novel Study CLI' >> "$RC_FILE"
+            echo "export PATH=\"$BIN_DIR:\$PATH\"" >> "$RC_FILE"
+        fi
 
-        warn "已添加到 $RC_FILE，请运行以下命令使其生效："
+        warn "已添加到 $RC_FILE"
         echo ""
-        echo -e "  ${BOLD}source $RC_FILE${NC}"
-        echo ""
+        echo -e "  运行 ${BOLD}source $RC_FILE${NC} 或重新打开终端使其生效"
         ;;
 esac
 
-# ── 完成 ─────────────────────────────────────────────────────────
-
+# 7. 完成
 echo ""
 info "✅ 安装完成！"
 echo ""
-echo -e "  运行 ${BOLD}ns --help${NC} 查看使用说明"
-echo -e "  运行 ${BOLD}ns config show${NC} 查看默认配置"
-echo -e "  运行 ${BOLD}ns update${NC} 更新到最新版本"
+echo -e "  ${BOLD}ns --help${NC}     查看所有命令"
+echo -e "  ${BOLD}ns --version${NC}  查看版本"
+echo -e "  ${BOLD}ns config init${NC} 交互式配置"
 echo ""

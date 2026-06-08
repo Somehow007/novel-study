@@ -15,15 +15,15 @@
 
 ## ✨ 功能特性
 
-- 📖 **智能注释** — 上传中文小说 `.txt`，自动内联插入英文注释（`原文(English [词性] 释义)`）
-- 🕸️ **小说爬取** — 输入小说目录页 URL，自动爬取全本内容，命令行支持断点续传（`--resume`）
-- 📊 **实时进度** — Web 端 SSE 实时推送爬取/处理进度，不再干等
+- 📖 **智能注释** — 为中文小说自动内联插入英文注释（`原文(English [词性] 释义)`）
+- 🕸️ **小说爬取** — 输入目录页 URL，自动爬取全本，支持断点续传、代理、并发控制
 - 🧠 **多词库** — 内置 CET-4 / CET-6 / 考研词库，可自由组合
 - ⚡ **高性能** — 50MB 整本小说 60 秒内处理完成（并行分词 + 二分密度过滤）
 - 🛡️ **反爬检测** — 自动识别 Cloudflare / 验证码 / 登录墙 / VIP 付费等保护机制
 - 🎚️ **密度控制** — 可调每句标注上限、字符窗口、最低难度分，避免注释过密
+- 📦 **开箱即用** — 一行命令安装，无需 Python 环境，macOS / Linux 直接可用
 
-## 📦 快速开始
+## 📦 安装
 
 ### 一键安装（推荐）
 
@@ -31,143 +31,197 @@
 curl -sSL https://raw.githubusercontent.com/Somehow007/novel-study/main/install.sh | bash
 ```
 
-安装完成后直接使用 `ns` 命令：
+自动识别系统（macOS / Linux），下载对应可执行文件，配置环境变量。安装完成后直接使用 `ns` 命令。
+
+### 手动下载
+
+从 [GitHub Releases](https://github.com/Somehow007/novel-study/releases) 下载对应平台的可执行文件：
+
+| 平台 | 文件 |
+|------|------|
+| macOS (Apple Silicon) | `ns-macos-arm64` |
+| macOS (Intel) | `ns-macos-x64` |
+| Linux (x64) | `ns-linux-x64` |
+| Windows | `ns-windows.exe` |
 
 ```bash
-ns --help                              # 查看帮助
-ns fetch https://example.com/book/123/ # 爬取小说
-ns annotate novel.txt                  # 注释文本
-ns serve                               # 启动 Web 服务
-ns config show                         # 查看配置
+# 示例：macOS Apple Silicon
+curl -LO https://github.com/Somehow007/novel-study/releases/latest/download/ns-macos-arm64
+chmod +x ns-macos-arm64
+sudo mv ns-macos-arm64 /usr/local/bin/ns
 ```
 
-### 手动安装
+### 从源码运行
 
 ```bash
-# 1. 安装 uv
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# 2. 克隆 & 安装依赖
 git clone https://github.com/Somehow007/novel-study.git
 cd novel-study
-uv sync
-
-# 3. 启动
-uv run uvicorn app:app --host 0.0.0.0 --port 8000  # Web 界面
-uv run python cli.py fetch <URL>                     # 命令行爬取
-uv run python main.py sample.txt                     # 命令行注释
+curl -LsSf https://astral.sh/uv/install.sh | sh  # 安装 uv
+uv sync                                            # 安装依赖
+uv run python cli.py --help                        # 使用 CLI
+uv run uvicorn app:app --port 8000                 # 或启动 Web 界面
 ```
 
-打开浏览器访问 `http://localhost:8000` 即可使用 Web 界面。
+---
 
-## 🚀 使用指南
+## 🚀 CLI 命令 (`ns`) 使用指南
 
-### CLI 命令 (`ns`)
+### 爬取小说
 
 ```bash
-# 爬取小说
+# 基本用法 — 爬取全本，输出到当前目录
 ns fetch https://www.example.com/book/12345/
-ns fetch <URL> --threads 5 --delay 1 --resume
 
-# 注释文本
+# 指定章节范围
+ns fetch <URL> --start 10 --end 50
+
+# 多线程 + 断点续传
+ns fetch <URL> --threads 5 --resume
+
+# 使用代理（目标站点有反爬时）
+ns fetch <URL> --proxy http://127.0.0.1:7890
+
+# 调整请求间隔（秒）和批量写入频率
+ns fetch <URL> --delay 1 --batch 100
+
+# 指定输出目录
+ns fetch <URL> -o ~/novels/
+
+# 强制编码
+ns fetch <URL> --encoding gbk
+```
+
+### 注释文本
+
+```bash
+# 基本用法 — 默认使用全部词库，输出到当前目录
 ns annotate novel.txt
-ns annotate novel.txt --vocab cet6,kaoyan --min-score 2.0
 
-# 词库 & 配置
+# 指定词库
+ns annotate novel.txt --vocab cet6,kaoyan
+
+# 调整密度参数
+ns annotate novel.txt --min-score 2.0 --max-sentence 2 --max-chars 80
+
+# 指定输出文件名和目录
+ns annotate novel.txt -o annotated.txt --output-dir ~/output/
+
+# 大文件强制并行
+ns annotate novel.txt --parallel
+
+# 静默模式（不输出预览）
+ns annotate novel.txt -q
+```
+
+### 词库管理
+
+```bash
+# 查看所有可用词库
 ns vocab list
+
+# 查看某个词库详情
+ns vocab info cet6
+```
+
+### 配置管理
+
+配置文件位于 `~/.novel-study/config.json`，所有命令的默认参数都从这里读取。
+
+```bash
+# 交互式配置向导（首次推荐）
+ns config init
+
+# 查看当前配置
 ns config show
+
+# 获取单个配置值
+ns config get default_threads
+
+# 修改配置
 ns config set default_threads 8
+ns config set default_delay 1
+ns config set default_vocab cet6,kaoyan
+ns config set proxy http://127.0.0.1:7890
+ns config set output_dir ~/novels
 
-# Web 服务
+# 用编辑器打开配置文件
+ns config edit
+
+# 重置为默认值
+ns config reset
+```
+
+**可配置项：**
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `default_threads` | 默认爬取线程数 | 3 |
+| `default_delay` | 默认请求间隔（秒） | 0.5 |
+| `default_batch` | 多少章写入一次文件 | 50 |
+| `default_vocab` | 默认词库列表 | cet4,cet6,kaoyan |
+| `default_min_score` | 最低难度分数 | 1.5 |
+| `default_max_per_sentence` | 每句最多标注词数 | 3 |
+| `default_max_per_chars` | 字符窗口大小 | 100 |
+| `proxy` | HTTP 代理地址 | null |
+| `output_dir` | 默认输出目录 | null（当前目录） |
+
+### Web 服务
+
+```bash
+# 启动 Web 界面（从源码运行时可用）
 ns serve --port 8000
+```
 
-# 自更新
+浏览器打开 `http://localhost:8000`，支持拖拽上传、实时进度、可视化参数调节。
+
+### 自更新
+
+```bash
+# 从源码运行时，拉取最新代码并更新依赖
 ns update
 ```
 
-### Web 界面
+打包版不支持自动更新，请重新下载最新版本。
 
-启动后打开浏览器，有两个功能标签：
+---
+
+## 🌐 Web 界面
+
+从源码运行 `ns serve` 启动后，浏览器有两个功能标签：
 
 | 标签 | 功能 | 说明 |
 |------|------|------|
 | 🕸️ **爬取小说** | 输入小说目录页 URL | 自动检测章节、并发下载、实时进度 |
 | 📖 **文本处理** | 上传 `.txt` 文件 | 选词库、调参数、实时进度、高亮预览 |
 
-### 命令行 — 文本注释
-
-```bash
-# 基本用法（默认使用 CET-4/6 + 考研词库）
-uv run python main.py sample.txt
-
-# 指定参数
-uv run python main.py sample.txt --max-sentence=5 --min-score=2.0
-
-# 并行模式（大文件推荐）
-uv run python main.py sample.txt --parallel
-```
-
-输出文件保存在 `output/` 目录。
-
-### 命令行 — 爬取小说
-
-```bash
-# 基本用法
-uv run python scripts/fetch_novel.py https://www.example.com/book/12345/
-
-# 指定章节范围
-uv run python scripts/fetch_novel.py <URL> --start 10 --end 50
-
-# 断点续传
-uv run python scripts/fetch_novel.py <URL> --resume
-
-# 调整并发和延迟（线程数超过系统上限会自动调整）
-uv run python scripts/fetch_novel.py <URL> --threads 5 --delay 1
-
-# 使用代理
-uv run python scripts/fetch_novel.py <URL> --proxy http://127.0.0.1:7890
-```
-
-输出文件保存在 `data/<书名>/` 目录。
-
-### API 接口
+## 🔌 API 接口
 
 | 端点 | 方法 | 说明 |
 |------|------|------|
-| `/api/annotate` | POST | 上传文件注释（同步） |
-| `/api/annotate/stream` | POST | 上传文件注释（SSE 实时进度） |
+| `/api/annotate` | POST | 上传文件注释 |
 | `/api/fetch/stream` | GET | 爬取小说（SSE 实时进度） |
 | `/api/vocabs` | GET | 获取可用词库列表 |
+| `/api/system/info` | GET | 系统信息（最大线程数等） |
 | `/api/download` | GET | 下载爬取结果文件 |
 | `/api/health` | GET | 健康检查 |
-| `/api/system/info` | GET | 系统信息（最大线程数等） |
 
 ## 📁 项目结构
 
 ```
 novel-study/
 ├── cli.py                 # CLI 入口（ns 命令）
-├── config.py              # 配置管理
+├── config.py              # 配置管理模块
+├── ns.spec                # PyInstaller 打包配置
 ├── install.sh             # 一键安装脚本
 ├── app.py                 # FastAPI Web API
-├── main.py                # 核心处理流程
-├── core/
-│   ├── segmenter.py       # jieba 分词（并行优化）
-│   ├── matcher.py         # Trie 关键词匹配
-│   ├── annotator.py       # 内联注释生成
-│   └── density.py         # 密度过滤（二分优化）
-├── vocab/
-│   ├── loader.py          # 词库加载器
-│   └── data/              # CET-4 / CET-6 / 考研词库 JSON
+├── main.py                # 核心处理引擎（process_text）
+├── core/                  # 分词、匹配、注释、密度控制
+├── vocab/                 # 词库数据 + 加载器
 ├── scripts/
-│   ├── fetch_novel.py     # 小说爬取脚本
-│   ├── fetch_vocab.py     # 词库爬取脚本
-│   └── validate_vocab.py  # 词库校验工具
-├── static/
-│   └── index.html         # Web 前端（单文件）
-├── data/                  # 爬取的小说 / 测试文本
-├── output/                # 注释结果输出
-└── tests/                 # 单元测试（33 个）
+│   └── fetch_novel.py     # 小说爬取核心逻辑
+├── static/index.html      # Web 前端
+├── data/                  # 爬取的小说
+└── output/                # 注释结果
 ```
 
 ## 🧪 运行测试
@@ -180,20 +234,13 @@ uv run pytest
 
 > **本工具仅供学习交流和个人研究使用。**
 
-1. **版权尊重** — 本项目的爬取功能仅用于获取可公开访问的网页内容。用户应遵守目标网站的使用条款，尊重原作者版权。
-2. **合理使用** — 请勿对目标站点发起高频请求或大规模爬取，避免对他人服务造成影响。
-3. **内容免责** — 本工具不对爬取内容的合法性、准确性负责，用户需自行承担使用风险。
-4. **反爬绕过** — 内置的 Cloudflare 绕过功能（cloudscraper）仅用于访问公开可读内容，不用于规避付费墙或登录限制。
+1. **版权尊重** — 爬取功能仅用于获取可公开访问的网页内容。用户应遵守目标网站的使用条款。
+2. **合理使用** — 请勿对目标站点发起高频请求或大规模爬取。
+3. **内容免责** — 本工具不对爬取内容的合法性、准确性负责。
+4. **反爬绕过** — Cloudflare 绕过仅用于访问公开可读内容，不用于规避付费墙。
 5. **禁止商用** — 请勿将本工具用于任何商业用途或侵犯他人权益的行为。
 
 **使用本工具即表示您已阅读并同意上述声明。**
-
-## 🎯 适用场景
-
-- 📚 英语学习者通过阅读中文小说自然积累词汇
-- 🎓 备考 CET-4 / CET-6 / 考研英语的学生
-- 📝 需要快速标注中文文本中高频词汇的研究者
-- 🔤 对比中英文语境，加深单词记忆
 
 ## 📄 License
 
