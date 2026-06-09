@@ -21,7 +21,7 @@
 - ⚡ **高性能** — 50MB 整本小说 60 秒内处理完成（并行分词 + 二分密度过滤）
 - 🛡️ **反爬检测** — 自动识别 Cloudflare / 验证码 / 登录墙 / VIP 付费等保护机制
 - 🎚️ **密度控制** — 可调每句标注上限、字符窗口、最低难度分，避免注释过密
-- 📦 **开箱即用** — 一行命令安装，无需 Python 环境，macOS / Linux 直接可用
+- 📦 **开箱即用** — 一行命令安装，无需 Python 环境，macOS / Linux / Windows 均支持
 
 ## 📦 安装
 
@@ -43,20 +43,20 @@ irm https://raw.githubusercontent.com/Somehow007/novel-study/main/install.ps1 | 
 
 ### 手动下载
 
-从 [GitHub Releases](https://github.com/Somehow007/novel-study/releases) 下载对应平台的可执行文件：
+从 [GitHub Releases](https://github.com/Somehow007/novel-study/releases) 下载对应平台的压缩包：
 
 | 平台 | 文件 |
 |------|------|
-| macOS (Apple Silicon) | `ns-macos-arm64` |
-| macOS (Intel) | `ns-macos-x64` |
-| Linux (x64) | `ns-linux-x64` |
-| Windows | `ns-windows.exe` |
+| macOS (Apple Silicon) | `ns-macos-arm64.tar.gz` |
+| macOS (Intel) | `ns-macos-x64.tar.gz` |
+| Linux (x64) | `ns-linux-x64.tar.gz` |
+| Windows (x64) | `ns-windows-x64.zip` |
 
 ```bash
-# 示例：macOS Apple Silicon
-curl -LO https://github.com/Somehow007/novel-study/releases/latest/download/ns-macos-arm64
-chmod +x ns-macos-arm64
-sudo mv ns-macos-arm64 /usr/local/bin/ns
+# macOS / Linux 示例
+curl -LO https://github.com/Somehow007/novel-study/releases/latest/download/ns-macos-arm64.tar.gz
+tar xzf ns-macos-arm64.tar.gz
+sudo mv ns/ns /usr/local/bin/ns
 ```
 
 ### 从源码运行
@@ -220,7 +220,8 @@ novel-study/
 ├── cli.py                 # CLI 入口（ns 命令）
 ├── config.py              # 配置管理模块
 ├── ns.spec                # PyInstaller 打包配置
-├── install.sh             # 一键安装脚本
+├── install.sh             # 安装脚本（macOS / Linux）
+├── install.ps1            # 安装脚本（Windows）
 ├── app.py                 # FastAPI Web API
 ├── main.py                # 核心处理引擎（process_text）
 ├── core/                  # 分词、匹配、注释、密度控制

@@ -4,23 +4,31 @@
 
 ### 一键安装
 
+**macOS / Linux：**
+
 ```bash
-curl -sSL https://raw.githubusercontent.com/Somehow007/novel-study/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Somehow007/novel-study/main/install.sh | bash
+```
+
+**Windows（PowerShell）：**
+
+```powershell
+irm https://raw.githubusercontent.com/Somehow007/novel-study/main/install.ps1 | iex
 ```
 
 自动识别系统，下载对应可执行文件，配置环境变量。安装完成后直接使用 `ns` 命令。
 
 ### 手动下载
 
-从 [GitHub Releases](https://github.com/Somehow007/novel-study/releases) 下载对应平台文件，放到 PATH 目录中。
+从 [GitHub Releases](https://github.com/Somehow007/novel-study/releases) 下载对应平台压缩包，解压后将可执行文件放到 PATH 目录中。
 
 ### 从源码运行
 
 ```bash
 git clone https://github.com/Somehow007/novel-study.git
 cd novel-study
-curl -LsSf https://astral.sh/uv/install.sh | sh
-uv sync
+curl -LsSf https://astral.sh/uv/install.sh | sh  # 安装 uv
+uv sync                                            # 安装依赖
 ```
 
 ---
@@ -110,7 +118,7 @@ ns config init             # 交互式配置向导
 ns config show             # 查看当前配置
 ns config get <key>        # 获取单个值
 ns config set <key> <val>  # 修改配置
-ns config edit             # 用编辑器打开
+ns config edit             # 用编辑器打开配置文件
 ns config reset            # 重置默认
 ```
 
@@ -178,6 +186,42 @@ ns update                  # 拉取最新代码（源码模式）
 | cet4 | 4,499 | CET-4 基础词汇 |
 | cet6 | 2,126 | CET-6 进阶词汇 |
 | kaoyan | 5,101 | 考研高频词汇 |
+
+---
+
+## 构建发行版
+
+需要在目标平台上构建（PyInstaller 不支持交叉编译）。
+
+```bash
+# 安装依赖 + PyInstaller
+uv sync
+uv pip install pyinstaller
+
+# 构建
+uv run pyinstaller ns.spec --noconfirm
+
+# macOS / Linux：打包为 tar.gz
+cd dist && tar czf ns-macos-arm64.tar.gz ns/
+
+# Windows：打包为 zip
+cd dist && Compress-Archive -Path ns -DestinationPath ns-windows-x64.zip
+```
+
+产物说明：
+
+| 平台 | 构建机器 | 产物格式 |
+|------|----------|---------|
+| macOS arm64 | Mac (Apple Silicon) | `ns-macos-arm64.tar.gz` |
+| macOS x64 | Mac (Intel) | `ns-macos-x64.tar.gz` |
+| Linux x64 | Linux 服务器 | `ns-linux-x64.tar.gz` |
+| Windows x64 | Windows 电脑 | `ns-windows-x64.zip` |
+
+上传到 GitHub Releases：
+
+```bash
+gh release create v0.2.0 dist/ns-macos-arm64.tar.gz dist/ns-windows-x64.zip
+```
 
 ---
 
