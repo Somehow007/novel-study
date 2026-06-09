@@ -16,6 +16,12 @@ curl -fsSL https://raw.githubusercontent.com/Somehow007/novel-study/main/install
 irm https://raw.githubusercontent.com/Somehow007/novel-study/main/install.ps1 | iex
 ```
 
+**Windows（CMD）：**
+
+```cmd
+powershell -Command "irm https://raw.githubusercontent.com/Somehow007/novel-study/main/install.ps1 | iex"
+```
+
 自动识别系统，下载对应可执行文件，配置环境变量。安装完成后直接使用 `ns` 命令。
 
 ### 手动下载
@@ -149,6 +155,14 @@ ns serve --port 8000       # 启动 Web 界面
 ```bash
 ns update                  # 拉取最新代码（源码模式）
 ```
+
+### 卸载
+
+```bash
+ns uninstall
+```
+
+自动删除安装目录、命令 wrapper、配置文件，并清理 shell 中的 PATH 条目。
 
 ---
 

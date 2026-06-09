@@ -372,6 +372,133 @@ def cmd_update(args):
         sys.exit(1)
 
 
+# ── 子命令：uninstall ───────────────────────────────────────────
+
+def cmd_uninstall(args):
+    """卸载 ns，删除安装文件和环境变量配置。"""
+    import shutil
+
+    print(bold("卸载 Novel Study CLI\n"))
+
+    # 检测安装方式
+    is_frozen = getattr(sys, 'frozen', False)
+    is_unix = sys.platform != "win32"
+
+    install_dir = Path.home() / ".novel-study"
+    config_dir = Path.home() / ".novel-study"
+
+    if is_unix:
+        bin_wrapper = Path.home() / ".local" / "bin" / "ns"
+        bin_dir = Path.home() / ".local" / "bin"
+    else:
+        bin_wrapper = Path.home() / ".local" / "bin" / "ns.cmd"
+        bin_dir = Path.home() / ".local" / "bin"
+
+    removed = []
+
+    # 1. 删除 wrapper
+    step_uninstall("删除 ns 命令")
+    if bin_wrapper.exists():
+        bin_wrapper.unlink()
+        ok_uninstall(str(bin_wrapper))
+        removed.append(str(bin_wrapper))
+    else:
+        skip_uninstall("未找到 wrapper")
+
+    # 2. 删除安装目录
+    step_uninstall("删除安装目录")
+    if install_dir.exists():
+        shutil.rmtree(install_dir)
+        ok_uninstall(str(install_dir))
+        removed.append(str(install_dir))
+    else:
+        skip_uninstall("未找到安装目录")
+
+    # 3. 清理 PATH
+    step_uninstall("清理环境变量")
+    if is_unix:
+        _clean_path_unix(bin_dir)
+    else:
+        _clean_path_windows(bin_dir)
+
+    # 4. 总结
+    print()
+    if removed:
+        print(bold("已删除："))
+        for p in removed:
+            print(f"  - {p}")
+    print()
+    print(green("[OK] 卸载完成"))
+    print(dim("  如需重新安装:"))
+    if is_unix:
+        print(dim("  curl -fsSL https://raw.githubusercontent.com/Somehow007/novel-study/main/install.sh | bash"))
+    else:
+        print(dim("  irm https://raw.githubusercontent.com/Somehow007/novel-study/main/install.ps1 | iex"))
+    print()
+
+
+def step_uninstall(msg):
+    print(f"  → {msg}")
+
+def ok_uninstall(msg):
+    print(f"    ✓ 已删除 {msg}")
+
+def skip_uninstall(msg):
+    print(f"    - {msg}")
+
+def _clean_path_unix(bin_dir):
+    """从 shell 配置文件中移除 PATH 条目。"""
+    bin_str = str(bin_dir)
+    cleaned = False
+    for rc in (".zshrc", ".bashrc", ".profile"):
+        rc_path = Path.home() / rc
+        if not rc_path.exists():
+            continue
+        lines = rc_path.read_text(encoding="utf-8").splitlines()
+        new_lines = []
+        skip_next = False
+        for line in lines:
+            if skip_next:
+                skip_next = False
+                continue
+            # 移除 "# Novel Study CLI" 注释行和紧随的 export 行
+            if line.strip() == "# Novel Study CLI":
+                skip_next = False
+                # 检查下一行是否是 export PATH
+                continue
+            if bin_str in line and "export PATH" in line:
+                cleaned = True
+                continue
+            new_lines.append(line)
+        if cleaned:
+            rc_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+            print(f"    ✓ 已从 {rc} 移除 PATH 条目")
+            break
+    if not cleaned:
+        print(f"    - 未在 shell 配置中找到 PATH 条目")
+
+def _clean_path_windows(bin_dir):
+    """从 Windows 用户 PATH 中移除条目。"""
+    import winreg
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment", 0, winreg.KEY_ALL_ACCESS)
+        current_path, _ = winreg.QueryValueEx(key, "Path")
+        bin_str = str(bin_dir)
+        if bin_str in current_path:
+            parts = [p for p in current_path.split(";") if p.strip() and p.strip() != bin_str]
+            new_path = ";".join(parts)
+            winreg.SetValueEx(key, "Path", 0, winreg.REG_EXPAND_SZ, new_path)
+            winreg.CloseKey(key)
+            print(f"    ✓ 已从用户 PATH 中移除 {bin_str}")
+            print(f"    请重启终端使 PATH 生效")
+        else:
+            winreg.CloseKey(key)
+            print(f"    - 未在用户 PATH 中找到该条目")
+    except Exception as e:
+        print(f"    ⚠ 无法修改注册表: {e}")
+        print(f"    请手动从系统环境变量中移除 {bin_dir}")
+
+
 # ── 主入口 ──────────────────────────────────────────────────────
 
 def main():
@@ -455,6 +582,11 @@ def main():
     p_update = subparsers.add_parser("update", help="自更新",
         description="从 git 拉取最新代码并更新依赖（源码模式）")
     p_update.set_defaults(func=cmd_update)
+
+    # ── uninstall ──
+    p_uninstall = subparsers.add_parser("uninstall", help="卸载 ns",
+        description="删除安装文件、配置和环境变量")
+    p_uninstall.set_defaults(func=cmd_uninstall)
 
     args = parser.parse_args()
 
