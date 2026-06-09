@@ -27,11 +27,19 @@
 
 ### 一键安装（推荐）
 
+**macOS / Linux：**
+
 ```bash
-curl -sSL https://raw.githubusercontent.com/Somehow007/novel-study/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Somehow007/novel-study/main/install.sh | bash
 ```
 
-自动识别系统（macOS / Linux），下载对应可执行文件，配置环境变量。安装完成后直接使用 `ns` 命令。
+**Windows（PowerShell）：**
+
+```powershell
+irm https://raw.githubusercontent.com/Somehow007/novel-study/main/install.ps1 | iex
+```
+
+自动识别系统，下载对应可执行文件，配置环境变量。安装完成后直接使用 `ns` 命令。
 
 ### 手动下载
 

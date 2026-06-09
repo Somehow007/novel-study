@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+#
+# Novel Study CLI 安装脚本（macOS / Linux）
+# Windows 用户请使用 install.ps1
+#
 set -e
 
 REPO="Somehow007/novel-study"
