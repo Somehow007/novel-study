@@ -277,13 +277,14 @@ def cmd_config(args):
         editor = os.environ.get("EDITOR") or os.environ.get("VISUAL")
         if not editor:
             # 尝试常见编辑器
-            for e in ("vim", "nano", "vi", "code"):
+            for e in ("code", "nano", "vim", "vi", "notepad"):
                 if shutil.which(e):
                     editor = e
                     break
         if not editor:
-            print(red("[错误] 未找到编辑器，请设置 EDITOR 环境变量"))
-            print(dim(f"  配置文件位置: {cfg.CONFIG_FILE}"))
+            print(red("[错误] 未找到编辑器"))
+            print(dim(f"  可用 ns config set <key> <value> 逐项修改"))
+            print(dim(f"  或直接编辑: {cfg.CONFIG_FILE}"))
             sys.exit(1)
         os.execlp(editor, editor, str(cfg.CONFIG_FILE))
 
